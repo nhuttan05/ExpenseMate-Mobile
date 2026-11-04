@@ -45,7 +45,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const handleLogout = () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất tài khoản?', [
       { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: () => Alert.alert('Thông báo', 'Đã đăng xuất.') },
+      { text: 'Đăng xuất', style: 'destructive', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Login' }] }) },
     ]);
   };
 
@@ -167,6 +167,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 trackColor={{ false: Colors.border, true: Colors.primary }}
               />
             </View>
+          </View>
+        </View>
+
+        <View style={styles.groupWrapper}>
+          <Text style={styles.groupTitle}>QUẢN LÝ TÀI CHÍNH</Text>
+          <View style={[styles.menuCard, Shadows.card]}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Statistics')}>
+              <View style={[styles.iconBox, { backgroundColor: '#EEF2FF' }]}><MaterialIcons name="bar-chart" size={20} color={Colors.primary} /></View>
+              <View style={styles.menuContent}><Text style={styles.menuText}>Thống kê chi tiêu</Text><Text style={styles.menuSubText}>Biểu đồ và phân tích theo danh mục</Text></View>
+              <MaterialIcons name="chevron-right" size={20} color={Colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Categories')}>
+              <View style={[styles.iconBox, { backgroundColor: '#FEF3C7' }]}><MaterialIcons name="category" size={20} color="#D97706" /></View>
+              <View style={styles.menuContent}><Text style={styles.menuText}>Quản lý danh mục</Text><Text style={styles.menuSubText}>Phân loại khoản thu và chi</Text></View>
+              <MaterialIcons name="chevron-right" size={20} color={Colors.textMuted} />
+            </TouchableOpacity>
           </View>
         </View>
 

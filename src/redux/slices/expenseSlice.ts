@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { Transaction, TransactionType } from '../../types';
-import { fetchAllTransactions, insertTransaction } from '../../services/database';
+import { Transaction } from '../../types';
+import { fetchAllTransactions, insertTransaction, updateTransaction } from '../../services/database';
 import { mockUser } from '../../data/mockData';
 
 interface ExpenseState {
@@ -38,6 +38,14 @@ export const addTransactionAsync = createAsyncThunk(
     };
     await insertTransaction(newTx);
     return newTx;
+  }
+);
+
+export const updateTransactionAsync = createAsyncThunk(
+  'expense/updateTransaction',
+  async (transaction: Transaction) => {
+    await updateTransaction(transaction);
+    return transaction;
   }
 );
 
@@ -84,6 +92,20 @@ export const expenseSlice = createSlice({
           state.totalBalance -= action.payload.amount;
           state.monthlyExpense += action.payload.amount;
         }
+      })
+      .addCase(updateTransactionAsync.fulfilled, (state, action) => {
+        const index = state.transactions.findIndex((item) => item.id === action.payload.id);
+        if (index === -1) return;
+
+        const previous = state.transactions[index];
+        state.transactions[index] = action.payload;
+
+        const previousIncome = previous.type === 'INCOME' ? previous.amount : 0;
+        const previousExpense = previous.type === 'EXPENSE' ? previous.amount : 0;
+        const nextIncome = action.payload.type === 'INCOME' ? action.payload.amount : 0;
+        const nextExpense = action.payload.type === 'EXPENSE' ? action.payload.amount : 0;
+        state.monthlyIncome += nextIncome - previousIncome;
+        state.monthlyExpense += nextExpense - previousExpense;
       });
   },
 });

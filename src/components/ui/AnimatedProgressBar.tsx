@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Animated, StyleSheet, ViewStyle } from 'react-native';
 import { Colors } from '../../constants/theme';
 
@@ -15,7 +15,7 @@ export const AnimatedProgressBar: React.FC<AnimatedProgressBarProps> = ({
   height = 8,
   style,
 }) => {
-  const animatedWidth = useRef(new Animated.Value(0)).current;
+  const [animatedWidth] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     Animated.timing(animatedWidth, {

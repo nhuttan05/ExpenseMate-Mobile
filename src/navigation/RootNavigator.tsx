@@ -8,12 +8,21 @@ import { NotificationsScreen } from '../pages/NotificationsScreen';
 import { BudgetScreen } from '../pages/BudgetScreen';
 import { TransactionsScreen } from '../pages/TransactionsScreen';
 import { ProfileScreen } from '../pages/ProfileScreen';
+import { LoginScreen } from '../pages/LoginScreen';
+import { RegisterScreen } from '../pages/RegisterScreen';
+import { ForgotPasswordScreen } from '../pages/ForgotPasswordScreen';
+import { EditTransactionScreen } from '../pages/EditTransactionScreen';
+import { CategoriesScreen } from '../pages/CategoriesScreen';
+import { StatisticsScreen } from '../pages/StatisticsScreen';
 
 const Stack = createNativeStackNavigator();
 
 export const RootNavigator = () => {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <Stack.Screen name="Main" component={TabNavigator} />
       <Stack.Screen
         name="AddTransaction"
@@ -29,6 +38,11 @@ export const RootNavigator = () => {
         options={{
           animation: 'slide_from_right',
         }}
+      />
+      <Stack.Screen
+        name="EditTransaction"
+        component={EditTransactionScreen}
+        options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="AIAssistant"
@@ -65,6 +79,8 @@ export const RootNavigator = () => {
           animation: 'slide_from_right',
         }}
       />
+      <Stack.Screen name="Categories" component={CategoriesScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="Statistics" component={StatisticsScreen} options={{ animation: 'slide_from_right' }} />
     </Stack.Navigator>
   );
 };

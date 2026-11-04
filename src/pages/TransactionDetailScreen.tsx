@@ -124,10 +124,10 @@ export const TransactionDetailScreen: React.FC<TransactionDetailScreenProps> = (
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[styles.actionBtn, styles.actionBtnOutline]}
-            onPress={() => Alert.alert('Báo cáo', 'Đã lưu yêu cầu đối soát.')}
+            onPress={() => navigation?.navigate('EditTransaction', { transaction })}
           >
-            <MaterialIcons name="flag" size={20} color={Colors.textSecondary} />
-            <Text style={styles.actionBtnOutlineText}>Đối soát</Text>
+            <MaterialIcons name="edit" size={20} color={Colors.textSecondary} />
+            <Text style={styles.actionBtnOutlineText}>Chỉnh sửa</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

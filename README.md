@@ -28,10 +28,16 @@ ExpenseMate-Mobile-App/
 │   │   └── useResponsive.ts    # Tính toán kích thước, Tablet/iPad, Landscape
 │   ├── navigation/             # Bộ điều hướng React Navigation (Tabs + Stack)
 │   ├── pages/                  # Các màn hình ứng dụng (Application Pages)
+│   │   ├── LoginScreen.tsx      # Đăng nhập local/mock
+│   │   ├── RegisterScreen.tsx   # Đăng ký local/mock
+│   │   ├── ForgotPasswordScreen.tsx # Khôi phục mật khẩu mock
 │   │   ├── HomeScreen.tsx      # Tổng quan số dư, biểu đồ cột, thu/chi
 │   │   ├── TransactionsScreen.tsx # Lịch sử giao dịch, tìm kiếm, lọc
 │   │   ├── AddTransactionScreen.tsx # Thêm giao dịch với AI gợi ý danh mục
+│   │   ├── EditTransactionScreen.tsx # Chỉnh sửa giao dịch
+│   │   ├── CategoriesScreen.tsx # Quản lý danh mục
 │   │   ├── BudgetScreen.tsx    # Quản lý ngân sách & thanh hoạt họa
+│   │   ├── StatisticsScreen.tsx # Thống kê theo danh mục
 │   │   ├── AIAssistantScreen.tsx # Chatbot tư vấn tài chính thông minh
 │   │   ├── ProfileScreen.tsx   # Hồ sơ, đồng bộ Axios, bảo mật
 │   │   ├── TransactionDetailScreen.tsx # Chi tiết biên lai giao dịch
@@ -71,6 +77,7 @@ ExpenseMate-Mobile-App/
 4. **Basic AI Engine:**
    - **Tự động gợi ý danh mục:** Khi người dùng nhập tên giao dịch (ví dụ gõ *"Winmart"*, *"Highlands"*, *"Tiền điện"*), AI tự nhận diện và chọn danh mục tương ứng.
    - **Tư vấn tài chính:** Phân tích tỷ lệ tiết kiệm, cảnh báo vượt 80% ngân sách và đưa ra lời khuyên phân bổ 50/30/20.
+   - **Nhập tự nhiên:** Câu như “Hôm nay ăn trưa 50.000 đồng” được nhận diện số tiền, tiêu đề và danh mục để tạo giao dịch.
 5. **Responsive (Điện thoại, Tablet, iPad & Xoay ngang):**
    - Tự động nhận diện thiết bị qua `useResponsive`.
    - Giới hạn `maxWidth: 860px` căn giữa màn hình trên iPad/Tablet và xoay ngang, giúp các thẻ không bị kéo dãn bất hợp lý.
@@ -79,6 +86,8 @@ ExpenseMate-Mobile-App/
    - Thanh tiến độ ngân sách tăng dần sinh động (`AnimatedProgressBar`).
 7. **Tamagui UI Support:**
    - Tích hợp `TamaguiProvider` và hệ thống token chuẩn fintech.
+
+> Ghi chú kiến trúc: project chọn Redux Toolkit cho trạng thái cục bộ và SQLite offline-first. Axios/API service có fallback mock để chạy được khi chưa có backend thật; khi triển khai server, thay `baseURL` trong `src/api/client.ts` bằng endpoint backend.
 
 ---
 

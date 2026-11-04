@@ -14,12 +14,15 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Shadows } from '../constants/theme';
 import { useAppDispatch, useAppSelector } from '../redux/store';
 import { addMessage } from '../redux/slices/aiSlice';
+import { addTransactionAsync } from '../redux/slices/expenseSlice';
 import { AIService } from '../services/aiService';
 import { AIChatMessage } from '../types';
 
 interface AIAssistantScreenProps {
   navigation: any;
 }
+
+const createMessageId = () => `msg_${Date.now()}`;
 
 export const AIAssistantScreen: React.FC<AIAssistantScreenProps> = ({ navigation }) => {
   const dispatch = useAppDispatch();
@@ -38,7 +41,7 @@ export const AIAssistantScreen: React.FC<AIAssistantScreenProps> = ({ navigation
     if (!text.trim()) return;
 
     const userMsg: AIChatMessage = {
-      id: `msg_${Date.now()}`,
+      id: createMessageId(),
       sender: 'user',
       message: text.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -46,10 +49,25 @@ export const AIAssistantScreen: React.FC<AIAssistantScreenProps> = ({ navigation
     dispatch(addMessage(userMsg));
     if (!textToSend) setInputText('');
 
+    const parsedTransaction = AIService.parseNaturalLanguage(text);
+    if (parsedTransaction) {
+      dispatch(addTransactionAsync({
+        title: parsedTransaction.title,
+        amount: parsedTransaction.amount,
+        type: 'EXPENSE',
+        category: parsedTransaction.category,
+        date: new Date().toISOString().split('T')[0],
+        formattedTime: 'Vừa xong',
+        paymentMethod: 'Tiền mặt',
+      }));
+    }
+
     // AI Processing
     setTimeout(() => {
       const lower = text.toLowerCase();
-      let reply = 'Tôi đã phân tích dữ liệu tài chính của bạn.';
+      let reply = parsedTransaction
+        ? `Đã tạo khoản chi ${parsedTransaction.title} trị giá ${parsedTransaction.amount.toLocaleString('vi-VN')} đ trong danh mục ${parsedTransaction.category.name}.`
+        : 'Tôi đã phân tích dữ liệu tài chính của bạn.';
       let suggestions: string[] | undefined = undefined;
 
       if (lower.includes('phân tích') || lower.includes('chi tiêu')) {
@@ -69,7 +87,7 @@ export const AIAssistantScreen: React.FC<AIAssistantScreenProps> = ({ navigation
       }
 
       const botMsg: AIChatMessage = {
-        id: `msg_${Date.now() + 1}`,
+        id: createMessageId(),
         sender: 'assistant',
         message: reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),

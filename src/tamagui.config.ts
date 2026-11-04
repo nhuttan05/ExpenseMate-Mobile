@@ -55,5 +55,7 @@ export const tamaguiConfig = createTamagui({
 export type Conf = typeof tamaguiConfig;
 
 declare module '@tamagui/core' {
+  // Tamagui requires this empty interface for declaration merging.
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   interface TamaguiCustomConfig extends Conf {}
 }
