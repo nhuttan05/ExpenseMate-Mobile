@@ -2,19 +2,30 @@ import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Shadows, Spacing } from '../constants/theme';
+import { AuthApi } from '../api/authApi';
 
 interface LoginScreenProps { navigation: any; }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập email và mật khẩu.');
       return;
     }
-    navigation.replace('Main');
+    setLoading(true);
+    try {
+      await AuthApi.login(email.trim(), password);
+      navigation.replace('Main');
+    } catch (error: any) {
+      const message = error?.response?.data?.error?.message || 'Không thể kết nối backend. Hãy kiểm tra Docker và địa chỉ API.';
+      Alert.alert('Đăng nhập thất bại', message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -28,7 +39,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         <Text style={styles.label}>Mật khẩu</Text>
         <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={Colors.textMuted} secureTextEntry />
         <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}><Text style={styles.linkRight}>Quên mật khẩu?</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}><Text style={styles.primaryButtonText}>Đăng nhập</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleLogin} disabled={loading}><Text style={styles.primaryButtonText}>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</Text></TouchableOpacity>
         <View style={styles.footerRow}><Text style={styles.footerText}>Chưa có tài khoản?</Text><TouchableOpacity onPress={() => navigation.navigate('Register')}><Text style={styles.link}> Đăng ký</Text></TouchableOpacity></View>
       </View>
       <Text style={styles.demoText}>Demo local • Dữ liệu được lưu trên thiết bị</Text>

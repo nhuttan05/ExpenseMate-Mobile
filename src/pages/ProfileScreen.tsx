@@ -14,6 +14,7 @@ import { useAppSelector } from '../redux/store';
 import { ApiService } from '../services/apiService';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
 import { mockUser } from '../data/mockData';
+import { AuthApi } from '../api/authApi';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -45,7 +46,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const handleLogout = () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất tài khoản?', [
       { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Login' }] }) },
+      { text: 'Đăng xuất', style: 'destructive', onPress: async () => { await AuthApi.logout(); navigation.reset({ index: 0, routes: [{ name: 'Login' }] }); } },
     ]);
   };
 

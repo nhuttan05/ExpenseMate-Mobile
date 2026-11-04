@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Shadows, Spacing } from '../constants/theme';
+import { AuthApi } from '../api/authApi';
 
 interface RegisterScreenProps { navigation: any; }
 
@@ -9,13 +10,23 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (!name.trim() || !email.trim() || password.length < 6) {
       Alert.alert('Thông tin chưa hợp lệ', 'Hãy nhập đủ thông tin và mật khẩu tối thiểu 6 ký tự.');
       return;
     }
-    Alert.alert('Đăng ký thành công', 'Tài khoản demo đã được tạo.', [{ text: 'Bắt đầu', onPress: () => navigation.replace('Main') }]);
+    setLoading(true);
+    try {
+      await AuthApi.register(name.trim(), email.trim(), password);
+      Alert.alert('Đăng ký thành công', 'Tài khoản đã được tạo trên backend.', [{ text: 'Bắt đầu', onPress: () => navigation.replace('Main') }]);
+    } catch (error: any) {
+      const message = error?.response?.data?.error?.message || 'Không thể kết nối backend. Hãy kiểm tra Docker và địa chỉ API.';
+      Alert.alert('Đăng ký thất bại', message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -27,7 +38,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
         <Text style={styles.label}>Họ và tên</Text><TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Nguyễn Văn A" placeholderTextColor={Colors.textMuted} />
         <Text style={styles.label}>Email</Text><TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor={Colors.textMuted} keyboardType="email-address" autoCapitalize="none" />
         <Text style={styles.label}>Mật khẩu</Text><TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Tối thiểu 6 ký tự" placeholderTextColor={Colors.textMuted} secureTextEntry />
-        <TouchableOpacity style={styles.primaryButton} onPress={handleRegister}><Text style={styles.primaryButtonText}>Đăng ký</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleRegister} disabled={loading}><Text style={styles.primaryButtonText}>{loading ? 'Đang tạo tài khoản...' : 'Đăng ký'}</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => navigation.navigate('Login')}><Text style={styles.loginLink}>Đã có tài khoản? Đăng nhập</Text></TouchableOpacity>
       </View>
     </KeyboardAvoidingView>

@@ -61,6 +61,19 @@ ExpenseMate-Mobile-App/
 └── package.json
 ```
 
+## Backend Auth API bằng Docker
+
+Backend nằm trong thư mục `backend/`, sử dụng Express + TypeScript + PostgreSQL. PostgreSQL được lưu bằng volume Docker `expensemate-postgres-data`.
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+Kiểm tra API tại `http://localhost:3000/health`. Auth contract nằm ở `backend/openapi.yaml`.
+
+Để Expo trên điện thoại thật gọi được backend trên máy tính, tạo file `.env` từ `.env.example` và thay `YOUR_COMPUTER_LAN_IP` bằng IP LAN của máy tính, sau đó khởi động lại Expo.
+
 ---
 
 ## ⚡ Các tính năng kỹ thuật trọng tâm

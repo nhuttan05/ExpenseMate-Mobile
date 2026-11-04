@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: expensemate-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: expensemate
+      POSTGRES_USER: expensemate
+      POSTGRES_PASSWORD: expensemate
+    ports:
+      - "5432:5432"
+    volumes:
+      - expensemate-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U expensemate -d expensemate"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: expensemate-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgres://expensemate:expensemate@postgres:5432/expensemate
+      JWT_ACCESS_SECRET: expensemate-local-access-secret-change-me-32
+      JWT_REFRESH_SECRET: expensemate-local-refresh-secret-change-me-32
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_TTL: 30d
+      CLIENT_ORIGIN: "*"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  expensemate-postgres-data:
