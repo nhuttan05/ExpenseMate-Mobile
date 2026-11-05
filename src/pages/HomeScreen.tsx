@@ -5,14 +5,17 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
+  ScrollView,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Shadows } from '../constants/theme';
 import { formatCurrency } from '../utils/formatters';
 import { useAppDispatch, useAppSelector } from '../redux/store';
 import { toggleBalanceVisibility, loadTransactions } from '../redux/slices/expenseSlice';
 import { loadBudgets } from '../redux/slices/budgetSlice';
+import { loadWalletsAndJars } from '../redux/slices/walletSlice';
+import { loadRecurringAndDebts } from '../redux/slices/recurringSlice';
+import { loadSimulationData } from '../redux/slices/simulationSlice';
 import { useResponsive } from '../hooks/useResponsive';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
 import { AnimatedCard } from '../components/ui/AnimatedCard';
@@ -24,808 +27,860 @@ interface HomeScreenProps {
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const dispatch = useAppDispatch();
-  const { isTablet, isLandscape } = useResponsive();
+  const { isTablet } = useResponsive();
 
-  const { transactions, totalBalance, monthlyIncome, monthlyExpense, isBalanceVisible } =
-    useAppSelector((state) => state.expense);
-
-  const [activeFilter, setActiveFilter] = useState<'WEEK' | 'MONTH'>('WEEK');
+  const { transactions, isBalanceVisible } = useAppSelector((state) => state.expense);
+  const { wallets, jars } = useAppSelector((state) => state.wallet);
+  const { health } = useAppSelector((state) => state.simulation);
+  const { recurringList, debtsList } = useAppSelector((state) => state.recurring);
 
   useEffect(() => {
     dispatch(loadTransactions());
     dispatch(loadBudgets());
+    dispatch(loadWalletsAndJars());
+    dispatch(loadRecurringAndDebts());
+    dispatch(loadSimulationData());
   }, [dispatch]);
 
-  const weekData = [
-    { day: 'T2', incomeH: 45, expenseH: 30 },
-    { day: 'T3', incomeH: 60, expenseH: 35 },
-    { day: 'T4', incomeH: 25, expenseH: 50 },
-    { day: 'T5', incomeH: 70, expenseH: 55 },
-    { day: 'T6', incomeH: 80, expenseH: 42 },
-    { day: 'T7', incomeH: 35, expenseH: 65 },
-    { day: 'CN', incomeH: 50, expenseH: 60 },
-  ];
+  // Tính tổng tài sản ròng (Net Worth = Tổng tiền mặt + Bank + MoMo + Tiết kiệm - Nợ tín dụng)
+  const totalNetWorth = wallets.reduce((sum, w) => {
+    if (w.isExcludedFromTotal) return sum;
+    return sum + w.balance;
+  }, 0);
+
+  const monthlyIncome = mockUser.monthlyIncome;
+  const monthlyExpense = mockUser.monthlyExpense;
+  const savingsRate = Math.round(((monthlyIncome - monthlyExpense) / monthlyIncome) * 100);
+
+  const pendingDebtsCount = debtsList.filter((d) => d.status === 'PENDING').length;
+  const activeRecurringCount = recurringList.filter((r) => r.status === 'ACTIVE').length;
 
   return (
     <ScreenContainer>
-      {/* 1. Top Header */}
+      {/* 1. TOP HEADER */}
       <View style={styles.header}>
-        <View style={styles.headerBrand}>
-          <View style={styles.logoIcon}>
-            <MaterialIcons name="account-balance-wallet" size={22} color={Colors.textWhite} />
+        <View style={styles.userInfo}>
+          <Image source={{ uri: mockUser.avatarUrl }} style={styles.avatar} />
+          <View style={styles.userTextContainer}>
+            <View style={styles.tierBadge}>
+              <MaterialIcons name="verified" size={12} color={Colors.primary} />
+              <Text style={styles.tierBadgeText}>{mockUser.tier}</Text>
+            </View>
+            <Text style={styles.userNameText}>Chào bạn, {mockUser.name}</Text>
           </View>
-          <Text style={styles.headerTitle}>ExpenseMate</Text>
         </View>
 
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => navigation.navigate('Notifications')}
+            onPress={() => navigation.navigate('AIAssistant')}
+            activeOpacity={0.75}
           >
-            <MaterialIcons name="notifications-none" size={24} color={Colors.textSecondary} />
-            <View style={styles.notificationDot} />
+            <MaterialIcons name="smart-toy" size={22} color={Colors.primary} />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-            <Image source={{ uri: mockUser.avatarUrl }} style={styles.avatarMini} />
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => navigation.navigate('Notifications')}
+            activeOpacity={0.75}
+          >
+            <MaterialIcons name="notifications-none" size={22} color={Colors.textPrimary} />
+            <View style={styles.unreadDot} />
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.contentPadding}>
-        {/* 2. User Greeting Row */}
-        <AnimatedCard delay={50} style={styles.userGreetingRow}>
-          <View style={styles.userInfo}>
-            <View style={styles.avatarWrapper}>
-              <Image source={{ uri: mockUser.avatarUrl }} style={styles.avatarMain} />
-              <View style={styles.onlineBadge} />
-            </View>
-            <View>
-              <View style={styles.badgeRow}>
-                <Text style={styles.greetingText}>Chào buổi sáng</Text>
-                <View style={styles.tierBadge}>
-                  <Text style={styles.tierText}>{mockUser.tier}</Text>
-                </View>
-              </View>
-              <Text style={styles.userName}>{mockUser.name}</Text>
-            </View>
+      {/* 2. HERO NET WORTH CARD (Bento Master Card) */}
+      <AnimatedCard delay={50} style={styles.heroCard}>
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroTitleRow}>
+            <MaterialIcons name="shield" size={16} color={Colors.incomeLight} />
+            <Text style={styles.heroLabel}>TỔNG TÀI SẢN KHẢ DỤNG</Text>
           </View>
-
-          <View style={styles.quickAccessButtons}>
-            <TouchableOpacity
-              style={styles.circleButton}
-              onPress={() => navigation.navigate('Transactions')}
-            >
-              <MaterialIcons name="search" size={20} color={Colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.circleButton}
-              onPress={() => navigation.navigate('Budget')}
-            >
-              <MaterialIcons name="pie-chart" size={20} color={Colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        </AnimatedCard>
-
-        {/* 3. Gradient Balance Card with Animation */}
-        <AnimatedCard delay={100}>
-          <LinearGradient
-            colors={['#4F46E5', '#3730A3', '#312E81']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.balanceCard}
+          <TouchableOpacity
+            onPress={() => dispatch(toggleBalanceVisibility())}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <View style={styles.balanceCardHeader}>
-              <View style={styles.balanceLabelRow}>
-                <Text style={styles.balanceCardLabel}>TỔNG SỐ DƯ KHẢ DỤNG</Text>
-                <TouchableOpacity
-                  onPress={() => dispatch(toggleBalanceVisibility())}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <MaterialIcons
-                    name={isBalanceVisible ? 'visibility' : 'visibility-off'}
-                    size={18}
-                    color="#DAD7FF"
-                  />
-                </TouchableOpacity>
+            <MaterialIcons
+              name={isBalanceVisible ? 'visibility' : 'visibility-off'}
+              size={20}
+              color={Colors.textMuted}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.heroBalance}>
+          {isBalanceVisible ? formatCurrency(totalNetWorth) : '••••••••••'}
+        </Text>
+
+        <View style={styles.heroMetaRow}>
+          <View style={styles.heroBadge}>
+            <MaterialIcons name="account-balance-wallet" size={14} color={Colors.income} />
+            <Text style={styles.heroBadgeText}>{wallets.length} Ví ảo đang hoạt động</Text>
+          </View>
+          <Text style={styles.heroSubtitle}>Cập nhật theo thời gian thực</Text>
+        </View>
+
+        {/* Quick Action Pills inside Hero */}
+        <View style={styles.heroActionsRow}>
+          <TouchableOpacity
+            style={styles.heroActionBtn}
+            onPress={() => navigation.navigate('Wallets', { openTransferModal: true })}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="sync-alt" size={18} color={Colors.textWhite} />
+            <Text style={styles.heroActionText}>Chuyển ví</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.heroActionBtn}
+            onPress={() => navigation.navigate('WhatIfSimulator')}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="auto-fix-high" size={18} color={Colors.textWhite} />
+            <Text style={styles.heroActionText}>Cỗ máy What-If</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.heroActionBtn}
+            onPress={() => navigation.navigate('Recurring')}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="event-repeat" size={18} color={Colors.textWhite} />
+            <Text style={styles.heroActionText}>Định kỳ & Nợ</Text>
+          </TouchableOpacity>
+        </View>
+      </AnimatedCard>
+
+      {/* 3. VIRTUAL WALLETS HORIZONTAL SLIDER */}
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionTitleWithIcon}>
+          <MaterialIcons name="account-balance" size={20} color={Colors.primary} />
+          <Text style={styles.sectionTitle}>Hệ Thống Ví Ảo Đa Tầng</Text>
+        </View>
+        <TouchableOpacity onPress={() => navigation.navigate('Wallets')} activeOpacity={0.7}>
+          <Text style={styles.sectionSeeAll}>Quản lý ({wallets.length})</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.walletsScrollContent}
+      >
+        {wallets.map((wallet) => (
+          <TouchableOpacity
+            key={wallet.id}
+            style={[styles.walletCard, { borderColor: wallet.color + '40' }]}
+            onPress={() => navigation.navigate('Wallets')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.walletCardHeader}>
+              <View style={[styles.walletIconBox, { backgroundColor: wallet.backgroundColor }]}>
+                <MaterialIcons name={wallet.icon as any} size={20} color={wallet.color} />
               </View>
-              <View style={styles.walletBadge}>
-                <View style={styles.walletDot} />
-                <Text style={styles.walletBadgeText}>Ví SQLite</Text>
-              </View>
+              <Text style={styles.walletAccountNo}>{wallet.accountNumber || 'Ví chính'}</Text>
             </View>
 
-            <View style={styles.balanceAmountRow}>
-              <Text style={styles.balanceAmount}>
-                {isBalanceVisible ? formatCurrency(totalBalance, false) : '••••••••'}
-              </Text>
-              <Text style={styles.currencySymbol}>đ</Text>
-            </View>
+            <Text style={styles.walletName} numberOfLines={1}>
+              {wallet.name}
+            </Text>
 
-            <View style={styles.balanceCardFooter}>
-              <View style={styles.growthBadge}>
-                <MaterialIcons name="trending-up" size={16} color="#6CF8BB" />
-                <Text style={styles.growthText}>+12.4% so với tháng trước</Text>
-              </View>
-              <Text style={styles.updateTimeText}>Đã đồng bộ SQLite</Text>
+            <Text
+              style={[
+                styles.walletBalance,
+                wallet.balance < 0 ? { color: Colors.expense } : { color: Colors.textPrimary },
+              ]}
+            >
+              {isBalanceVisible ? formatCurrency(wallet.balance) : '••••••'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+
+        {/* Add Wallet Card */}
+        <TouchableOpacity
+          style={styles.addWalletCard}
+          onPress={() => navigation.navigate('Wallets')}
+          activeOpacity={0.75}
+        >
+          <View style={styles.addWalletIconBox}>
+            <MaterialIcons name="add" size={24} color={Colors.primary} />
+          </View>
+          <Text style={styles.addWalletText}>Thêm ví mới</Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* 4. BENTO GRID 2 COLUMNS (Health Score & Monthly Cashflow) */}
+      <View style={[styles.bentoRow, isTablet && { flexWrap: 'nowrap' }]}>
+        {/* Left Bento: Financial Health Score */}
+        <AnimatedCard delay={100} style={[styles.bentoCard, { flex: 1 }]}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('WhatIfSimulator')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.bentoHeader}>
+              <Text style={styles.bentoSubtitle}>SỨC KHỎE TÀI CHÍNH</Text>
+              <MaterialIcons name="bolt" size={18} color={Colors.warning} />
             </View>
-          </LinearGradient>
+            <View style={styles.healthGaugeRow}>
+              <Text style={styles.healthScoreBig}>{health.score}</Text>
+              <Text style={styles.healthScoreMax}>/1000</Text>
+            </View>
+            <View style={styles.healthTag}>
+              <MaterialIcons name="verified" size={13} color={Colors.primary} />
+              <Text style={styles.healthTagText}>{health.tier}</Text>
+            </View>
+            <Text style={styles.healthTipText} numberOfLines={2}>
+              Quỹ khẩn cấp đảm bảo {health.emergencyFundMonths} tháng chi tiêu an toàn.
+            </Text>
+          </TouchableOpacity>
         </AnimatedCard>
 
-        {/* 4. Dual Income / Expense Cards (Adaptive for Tablet/Landscape) */}
-        <AnimatedCard delay={150}>
-          <View style={[styles.metricRow, (isTablet || isLandscape) && styles.metricRowWide]}>
-            <View style={[styles.metricCard, Shadows.card]}>
-              <View style={styles.metricHeader}>
-                <Text style={styles.metricLabel}>Tổng thu nhập</Text>
-                <View style={[styles.metricIconBox, { backgroundColor: '#E6F4EA' }]}>
-                  <MaterialIcons name="arrow-downward" size={16} color={Colors.secondary} />
-                </View>
+        {/* Right Bento: Monthly Cashflow */}
+        <AnimatedCard delay={150} style={[styles.bentoCard, { flex: 1 }]}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Statistics')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.bentoHeader}>
+              <Text style={styles.bentoSubtitle}>DÒNG TIỀN THÁNG NÀY</Text>
+              <MaterialIcons name="trending-up" size={18} color={Colors.income} />
+            </View>
+            <View style={styles.cashflowRow}>
+              <Text style={styles.cashflowValue}>+{savingsRate}%</Text>
+              <Text style={styles.cashflowLabel}>Tỷ lệ tích lũy</Text>
+            </View>
+            <View style={styles.incomeExpenseBars}>
+              <View style={styles.incomePill}>
+                <Text style={styles.incomePillText}>Thu: 35.0 tr</Text>
               </View>
-              <Text style={[styles.metricValue, { color: Colors.secondary }]}>
-                +{formatCurrency(monthlyIncome)}
-              </Text>
-              <View style={styles.subMetricRow}>
-                <MaterialIcons name="arrow-upward" size={14} color={Colors.secondary} />
-                <Text style={[styles.subMetricText, { color: Colors.secondary }]}>
-                  8.2% tuần này
+              <View style={styles.expensePill}>
+                <Text style={styles.expensePillText}>Chi: 18.2 tr</Text>
+              </View>
+            </View>
+            <Text style={styles.healthTipText} numberOfLines={2}>
+              Thặng dư dòng tiền: +{(monthlyIncome - monthlyExpense).toLocaleString('vi-VN')} đ
+            </Text>
+          </TouchableOpacity>
+        </AnimatedCard>
+      </View>
+
+      {/* 5. 6 CHIẾC LỌ TÀI CHÍNH (JARS ENVELOPES) */}
+      <AnimatedCard delay={200} style={styles.jarsCard}>
+        <View style={styles.sectionHeaderRowInside}>
+          <View style={styles.sectionTitleWithIcon}>
+            <MaterialIcons name="pie-chart" size={18} color={Colors.primary} />
+            <Text style={styles.cardHeaderTitle}>6 Hũ Chi Tiêu (JARS)</Text>
+          </View>
+          <TouchableOpacity onPress={() => navigation.navigate('Budget')} activeOpacity={0.7}>
+            <Text style={styles.sectionSeeAll}>Chi tiết</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.jarsDescription}>
+          Quy tắc phân bổ thu nhập thông minh theo chuẩn T. Harv Eker
+        </Text>
+
+        <View style={styles.jarsGrid}>
+          {jars.map((jar) => {
+            const spentPercent = Math.min(100, Math.round((jar.spentAmount / jar.allocatedAmount) * 100));
+            const isWarning = spentPercent >= 80;
+
+            return (
+              <View key={jar.id} style={styles.jarItem}>
+                <View style={styles.jarItemHeader}>
+                  <View style={styles.jarBadgeWithIcon}>
+                    <View style={[styles.jarMiniDot, { backgroundColor: jar.color }]} />
+                    <Text style={styles.jarCodeText}>{jar.code}</Text>
+                    <Text style={styles.jarPercentText}>({jar.percentage}%)</Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.jarSpentPercent,
+                      isWarning ? { color: Colors.expense, fontWeight: '800' } : { color: Colors.textSecondary },
+                    ]}
+                  >
+                    {spentPercent}%
+                  </Text>
+                </View>
+
+                {/* Progress bar */}
+                <View style={styles.jarProgressBarTrack}>
+                  <View
+                    style={[
+                      styles.jarProgressBarFill,
+                      {
+                        width: `${spentPercent}%`,
+                        backgroundColor: isWarning ? Colors.expense : jar.color,
+                      },
+                    ]}
+                  />
+                </View>
+
+                <Text style={styles.jarSubtext} numberOfLines={1}>
+                  {jar.vietnameseName}
                 </Text>
               </View>
-            </View>
+            );
+          })}
+        </View>
+      </AnimatedCard>
 
-            <View style={[styles.metricCard, Shadows.card]}>
-              <View style={styles.metricHeader}>
-                <Text style={styles.metricLabel}>Tổng chi tiêu</Text>
-                <View style={[styles.metricIconBox, { backgroundColor: '#FEE2E2' }]}>
-                  <MaterialIcons name="arrow-upward" size={16} color={Colors.error} />
-                </View>
-              </View>
-              <Text style={[styles.metricValue, { color: Colors.error }]}>
-                -{formatCurrency(monthlyExpense)}
-              </Text>
-              <View style={styles.subMetricRow}>
-                <MaterialIcons name="trending-up" size={14} color={Colors.error} />
-                <Text style={[styles.subMetricText, { color: Colors.error }]}>65% định mức</Text>
-              </View>
-            </View>
-          </View>
-        </AnimatedCard>
-
-        {/* 5. Quick Actions */}
-        <AnimatedCard delay={200}>
-          <View style={[styles.quickActionsCard, Shadows.card]}>
-            <TouchableOpacity
-              style={styles.actionItem}
-              onPress={() => navigation.navigate('AddTransaction')}
-            >
-              <View style={[styles.actionCircle, { backgroundColor: '#E2DFFF' }]}>
-                <MaterialIcons name="send" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.actionLabel}>Chuyển tiền</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionItem}
-              onPress={() => navigation.navigate('AddTransaction')}
-            >
-              <View style={[styles.actionCircle, { backgroundColor: '#D1FAE5' }]}>
-                <MaterialIcons name="add-card" size={22} color={Colors.secondary} />
-              </View>
-              <Text style={styles.actionLabel}>Nạp ví</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionItem}
-              onPress={() => navigation.navigate('Transactions')}
-            >
-              <View style={[styles.actionCircle, { backgroundColor: '#EAEDFF' }]}>
-                <MaterialIcons name="qr-code-scanner" size={22} color={Colors.textPrimary} />
-              </View>
-              <Text style={styles.actionLabel}>Quét QR</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionItem}
-              onPress={() => navigation.navigate('AIAssistant')}
-            >
-              <View style={[styles.actionCircle, { backgroundColor: '#FFDAD6' }]}>
-                <MaterialIcons name="auto-awesome" size={22} color="#960014" />
-              </View>
-              <Text style={styles.actionLabel}>Trợ lý AI</Text>
-            </TouchableOpacity>
-          </View>
-        </AnimatedCard>
-
-        {/* 6. Weekly Cashflow Chart */}
-        <AnimatedCard delay={250}>
-          <View style={[styles.chartCard, Shadows.card]}>
-            <View style={styles.chartHeader}>
-              <View>
-                <Text style={styles.cardSectionTitle}>Biểu đồ thu chi</Text>
-                <Text style={styles.cardSectionSubtitle}>Dòng tiền thực nhận & thanh toán</Text>
-              </View>
-              <View style={styles.filterPillGroup}>
-                <TouchableOpacity
-                  style={[
-                    styles.filterPill,
-                    activeFilter === 'WEEK' && styles.filterPillActive,
-                  ]}
-                  onPress={() => setActiveFilter('WEEK')}
-                >
-                  <Text
-                    style={[
-                      styles.filterPillText,
-                      activeFilter === 'WEEK' && styles.filterPillTextActive,
-                    ]}
-                  >
-                    Tuần này
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.filterPill,
-                    activeFilter === 'MONTH' && styles.filterPillActive,
-                  ]}
-                  onPress={() => setActiveFilter('MONTH')}
-                >
-                  <Text
-                    style={[
-                      styles.filterPillText,
-                      activeFilter === 'MONTH' && styles.filterPillTextActive,
-                    ]}
-                  >
-                    Tháng này
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.chartLegend}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: Colors.secondary }]} />
-                <Text style={styles.legendText}>Thu nhập</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: Colors.error }]} />
-                <Text style={styles.legendText}>Chi tiêu</Text>
-              </View>
-            </View>
-
-            <View style={styles.barChartContainer}>
-              {weekData.map((item, index) => (
-                <View key={index} style={styles.barGroup}>
-                  <View style={styles.barsArea}>
-                    <View
-                      style={[
-                        styles.barItem,
-                        { height: item.incomeH, backgroundColor: Colors.secondary },
-                      ]}
-                    />
-                    <View
-                      style={[
-                        styles.barItem,
-                        { height: item.expenseH, backgroundColor: Colors.error },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.barLabel}>{item.day}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </AnimatedCard>
-
-        {/* 7. Recent Transactions List */}
-        <AnimatedCard delay={300}>
-          <View style={styles.recentSectionHeader}>
-            <Text style={styles.cardSectionTitle}>Giao dịch gần đây</Text>
-            <TouchableOpacity
-              style={styles.viewAllRow}
-              onPress={() => navigation.navigate('Transactions')}
-            >
-              <Text style={styles.viewAllText}>Xem tất cả</Text>
-              <MaterialIcons name="chevron-right" size={18} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={[styles.transactionsCard, Shadows.card]}>
-            {transactions.slice(0, 4).map((tx, index) => {
-              const isIncome = tx.type === 'INCOME';
-              const isLast = index === Math.min(transactions.length, 4) - 1;
-              return (
-                <TouchableOpacity
-                  key={tx.id}
-                  style={[styles.txItem, !isLast && styles.txItemBorder]}
-                  onPress={() => navigation.navigate('TransactionDetail', { transaction: tx })}
-                >
-                  <View style={styles.txLeft}>
-                    <View
-                      style={[
-                        styles.txCategoryIcon,
-                        { backgroundColor: tx.category.backgroundColor },
-                      ]}
-                    >
-                      <MaterialIcons
-                        name={tx.category.icon as any}
-                        size={20}
-                        color={tx.category.color}
-                      />
-                    </View>
-                    <View style={styles.txMeta}>
-                      <Text style={styles.txTitle} numberOfLines={1}>
-                        {tx.title}
-                      </Text>
-                      <Text style={styles.txSubtitle} numberOfLines={1}>
-                        {tx.category.name} • {tx.formattedTime || tx.date}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.txRight}>
-                    <Text
-                      style={[
-                        styles.txAmount,
-                        { color: isIncome ? Colors.secondary : Colors.error },
-                      ]}
-                    >
-                      {isIncome ? '+' : '-'}{formatCurrency(tx.amount)}
-                    </Text>
-                    <Text style={styles.txPaymentMethod}>{tx.paymentMethod}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </AnimatedCard>
-
-        <View style={{ height: 100 }} />
+      {/* 6. GIAO DỊCH GẦN ĐÂY */}
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionTitleWithIcon}>
+          <MaterialIcons name="receipt-long" size={20} color={Colors.primary} />
+          <Text style={styles.sectionTitle}>Giao Dịch Gần Đây</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Transactions')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.sectionSeeAll}>Tất cả ({transactions.length})</Text>
+        </TouchableOpacity>
       </View>
+
+      <View style={styles.transactionsContainer}>
+        {transactions.slice(0, 5).map((tx) => {
+          const isIncome = tx.type === 'INCOME';
+          const isTransfer = tx.type === 'TRANSFER';
+
+          return (
+            <TouchableOpacity
+              key={tx.id}
+              style={styles.txRow}
+              onPress={() => navigation.navigate('TransactionDetail', { transactionId: tx.id })}
+              activeOpacity={0.75}
+            >
+              <View
+                style={[
+                  styles.txIconBox,
+                  { backgroundColor: tx.category?.backgroundColor || Colors.surfaceSubtle },
+                ]}
+              >
+                <MaterialIcons
+                  name={(tx.category?.icon as any) || 'receipt'}
+                  size={22}
+                  color={tx.category?.color || Colors.primary}
+                />
+              </View>
+
+              <View style={styles.txInfo}>
+                <Text style={styles.txTitle} numberOfLines={1}>
+                  {tx.title}
+                </Text>
+                <View style={styles.txMetaRow}>
+                  <Text style={styles.txTime}>{tx.formattedTime || tx.date}</Text>
+                  {tx.paymentMethod ? (
+                    <Text style={styles.txWalletTag}>• {tx.paymentMethod}</Text>
+                  ) : null}
+                  {tx.jarCode ? (
+                    <Text style={styles.txJarTag}>• Hũ {tx.jarCode}</Text>
+                  ) : null}
+                </View>
+              </View>
+
+              <Text
+                style={[
+                  styles.txAmount,
+                  isIncome
+                    ? { color: Colors.income }
+                    : isTransfer
+                    ? { color: Colors.info }
+                    : { color: Colors.textPrimary },
+                ]}
+              >
+                {isIncome ? '+' : isTransfer ? '' : '-'}
+                {formatCurrency(tx.amount)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Spacing for bottom tab bar */}
+      <View style={{ height: 100 }} />
     </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
   header: {
-    height: 56,
-    paddingHorizontal: Spacing.lg,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F3F9',
-  },
-  headerBrand: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  logoIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.subtle,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerLow,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 9,
-    right: 9,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: Colors.error,
-  },
-  avatarMini: {
-    width: 34,
-    height: 34,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1.5,
-    borderColor: Colors.primaryLight,
-  },
-  contentPadding: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-  },
-  userGreetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: Spacing.lg,
+    paddingHorizontal: Spacing.xs,
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
   },
-  avatarWrapper: {
-    position: 'relative',
-  },
-  avatarMain: {
+  avatar: {
     width: 48,
     height: 48,
     borderRadius: BorderRadius.full,
-  },
-  onlineBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: Colors.surface,
+    borderColor: Colors.borderEmerald,
   },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  greetingText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
+  userTextContainer: {
+    gap: 2,
   },
   tierBadge: {
-    paddingHorizontal: Spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primaryFixed,
+    alignSelf: 'flex-start',
   },
-  tierText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.onPrimaryFixed,
-  },
-  userName: {
-    fontSize: 16,
+  tierBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
+    color: Colors.primary,
+  },
+  userNameText: {
+    fontSize: 17,
+    fontWeight: '800',
     color: Colors.textPrimary,
-    marginTop: 2,
   },
-  quickAccessButtons: {
-    flexDirection: 'row',
-    gap: Spacing.xs,
-  },
-  circleButton: {
-    width: 38,
-    height: 38,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerLow,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  balanceCard: {
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    marginBottom: Spacing.lg,
-    ...Shadows.floating,
-  },
-  balanceCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  balanceLabelRow: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  balanceCardLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.8,
-    color: '#DAD7FF',
-  },
-  walletBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  walletDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#6CF8BB',
-  },
-  walletBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.textWhite,
-  },
-  balanceAmountRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginVertical: Spacing.md,
-    gap: Spacing.xs,
-  },
-  balanceAmount: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: Colors.textWhite,
-    letterSpacing: -0.5,
-  },
-  currencySymbol: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#DAD7FF',
-  },
-  balanceCardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Spacing.xs,
-  },
-  growthBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-    backgroundColor: 'rgba(0, 108, 73, 0.4)',
-  },
-  growthText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#6CF8BB',
-  },
-  updateTimeText: {
-    fontSize: 11,
-    color: 'rgba(218, 215, 255, 0.8)',
-  },
-  metricRow: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  metricRowWide: {
-    gap: Spacing.lg,
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: Colors.surface,
+  iconButton: {
+    width: 44,
+    height: 44,
     borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadows.card,
   },
-  metricHeader: {
+  unreadDot: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.expense,
+  },
+
+  // HERO CARD
+  heroCard: {
+    backgroundColor: Colors.navyDeep,
+    borderRadius: BorderRadius.xxl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.xl,
+    ...Shadows.hero,
+  },
+  heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.sm,
   },
-  metricLabel: {
+  heroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroLabel: {
     fontSize: 12,
-    fontWeight: '500',
-    color: Colors.textSecondary,
+    fontWeight: '800',
+    color: Colors.textMuted,
+    letterSpacing: 0.8,
   },
-  metricIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: BorderRadius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
+  heroBalance: {
+    fontSize: 34,
+    fontWeight: '900',
+    color: Colors.textWhite,
+    letterSpacing: -0.5,
+    marginVertical: Spacing.xs,
   },
-  metricValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  subMetricRow: {
+  heroMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
-    gap: 2,
+    gap: Spacing.md,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.xl,
   },
-  subMetricText: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  quickActionsCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
+  heroBadge: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: Spacing.lg,
-  },
-  actionItem: {
     alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  actionCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.subtle,
-  },
-  actionLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: Colors.textPrimary,
-  },
-  chartCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  chartHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cardSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  cardSectionSubtitle: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  filterPillGroup: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.full,
-    padding: 2,
-  },
-  filterPill: {
+    gap: 4,
+    backgroundColor: '#1E293B',
     paddingHorizontal: Spacing.md,
     paddingVertical: 4,
     borderRadius: BorderRadius.full,
   },
-  filterPillActive: {
-    backgroundColor: Colors.primary,
+  heroBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.income,
   },
-  filterPillText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: Colors.textSecondary,
+  heroSubtitle: {
+    fontSize: 12,
+    color: Colors.textMuted,
   },
-  filterPillTextActive: {
+  heroActionsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    paddingTop: Spacing.md,
+  },
+  heroActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 42,
+    backgroundColor: '#1E293B',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  heroActionText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: Colors.textWhite,
   },
-  chartLegend: {
-    flexDirection: 'row',
-    gap: Spacing.lg,
-    marginTop: Spacing.md,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  barChartContainer: {
+
+  // SECTION HEADERS
+  sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 120,
-    marginTop: Spacing.lg,
-    paddingHorizontal: Spacing.xs,
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+    marginTop: Spacing.sm,
   },
-  barGroup: {
+  sectionHeaderRowInside: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  sectionTitleWithIcon: {
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  barsArea: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 4,
-    height: 90,
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Colors.textPrimary,
   },
-  barItem: {
-    width: 8,
-    borderRadius: 4,
+  cardHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textPrimary,
   },
-  barLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontWeight: '500',
+  sectionSeeAll: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
   },
-  recentSectionHeader: {
+
+  // WALLETS SCROLL
+  walletsScrollContent: {
+    paddingBottom: Spacing.lg,
+    gap: Spacing.md,
+  },
+  walletCard: {
+    width: 170,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    borderWidth: 1.5,
+    ...Shadows.card,
+  },
+  walletCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.md,
   },
-  viewAllRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewAllText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  transactionsCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    overflow: 'hidden',
-  },
-  txItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Spacing.lg,
-  },
-  txItemBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F4F5FA',
-  },
-  txLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    flex: 1,
-  },
-  txCategoryIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: BorderRadius.full,
+  walletIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  txMeta: {
+  walletAccountNo: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  walletName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  walletBalance: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  addWalletCard: {
+    width: 130,
+    backgroundColor: Colors.surfaceSubtle,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  addWalletIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addWalletText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+
+  // BENTO GRID
+  bentoRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  bentoCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadows.card,
+  },
+  bentoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  bentoSubtitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.textMuted,
+    letterSpacing: 0.6,
+  },
+  healthGaugeRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 2,
+    marginVertical: 4,
+  },
+  healthScoreBig: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: Colors.textPrimary,
+  },
+  healthScoreMax: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textMuted,
+  },
+  healthTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+    alignSelf: 'flex-start',
+    marginBottom: Spacing.xs,
+  },
+  healthTagText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  healthTipText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  cashflowRow: {
+    marginVertical: 4,
+  },
+  cashflowValue: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: Colors.income,
+  },
+  cashflowLabel: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: '600',
+  },
+  incomeExpenseBars: {
+    flexDirection: 'row',
+    gap: 4,
+    marginVertical: Spacing.xs,
+  },
+  incomePill: {
+    backgroundColor: Colors.incomeLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.xs,
+  },
+  incomePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.income,
+  },
+  expensePill: {
+    backgroundColor: Colors.expenseLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.xs,
+  },
+  expensePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.expense,
+  },
+
+  // JARS ENVELOPES
+  jarsCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing.xl,
+    ...Shadows.card,
+  },
+  jarsDescription: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginBottom: Spacing.md,
+  },
+  jarsGrid: {
+    gap: Spacing.md,
+  },
+  jarItem: {
+    gap: 4,
+  },
+  jarItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  jarBadgeWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  jarMiniDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  jarCodeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  jarPercentText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: '600',
+  },
+  jarSpentPercent: {
+    fontSize: 12,
+  },
+  jarProgressBarTrack: {
+    height: 6,
+    backgroundColor: Colors.surfaceSubtle,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  jarProgressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  jarSubtext: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+
+  // TRANSACTIONS
+  transactionsContainer: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadows.card,
+  },
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderSubtle,
+    gap: Spacing.md,
+  },
+  txIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  txInfo: {
     flex: 1,
+    gap: 2,
   },
   txTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textPrimary,
   },
-  txSubtitle: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
+  txMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 4,
   },
-  txRight: {
-    alignItems: 'flex-end',
-    marginLeft: Spacing.sm,
+  txTime: {
+    fontSize: 12,
+    color: Colors.textMuted,
+  },
+  txWalletTag: {
+    fontSize: 11,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  txJarTag: {
+    fontSize: 11,
+    color: Colors.purple,
+    fontWeight: '600',
   },
   txAmount: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  txPaymentMethod: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 2,
+    fontSize: 15,
+    fontWeight: '800',
   },
 });

@@ -13,8 +13,8 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || password.length < 6) {
-      Alert.alert('Thông tin chưa hợp lệ', 'Hãy nhập đủ thông tin và mật khẩu tối thiểu 6 ký tự.');
+    if (!name.trim() || !email.trim() || password.length < 8) {
+      Alert.alert('Thông tin chưa hợp lệ', 'Hãy nhập đủ thông tin và mật khẩu tối thiểu 8 ký tự.');
       return;
     }
     setLoading(true);
@@ -37,7 +37,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
       <View style={styles.card}>
         <Text style={styles.label}>Họ và tên</Text><TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Nguyễn Văn A" placeholderTextColor={Colors.textMuted} />
         <Text style={styles.label}>Email</Text><TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor={Colors.textMuted} keyboardType="email-address" autoCapitalize="none" />
-        <Text style={styles.label}>Mật khẩu</Text><TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Tối thiểu 6 ký tự" placeholderTextColor={Colors.textMuted} secureTextEntry />
+        <Text style={styles.label}>Mật khẩu</Text><TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Tối thiểu 8 ký tự" placeholderTextColor={Colors.textMuted} secureTextEntry />
         <TouchableOpacity style={styles.primaryButton} onPress={handleRegister} disabled={loading}><Text style={styles.primaryButtonText}>{loading ? 'Đang tạo tài khoản...' : 'Đăng ký'}</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => navigation.navigate('Login')}><Text style={styles.loginLink}>Đã có tài khoản? Đăng nhập</Text></TouchableOpacity>
       </View>

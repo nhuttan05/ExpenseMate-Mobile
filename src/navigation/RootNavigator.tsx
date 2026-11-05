@@ -14,6 +14,9 @@ import { ForgotPasswordScreen } from '../pages/ForgotPasswordScreen';
 import { EditTransactionScreen } from '../pages/EditTransactionScreen';
 import { CategoriesScreen } from '../pages/CategoriesScreen';
 import { StatisticsScreen } from '../pages/StatisticsScreen';
+import { WalletsScreen } from '../pages/WalletsScreen';
+import { RecurringScreen } from '../pages/RecurringScreen';
+import { WhatIfSimulatorScreen } from '../pages/WhatIfSimulatorScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -31,6 +34,21 @@ export const RootNavigator = () => {
           presentation: 'modal',
           animation: 'slide_from_bottom',
         }}
+      />
+      <Stack.Screen
+        name="Wallets"
+        component={WalletsScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="Recurring"
+        component={RecurringScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="WhatIfSimulator"
+        component={WhatIfSimulatorScreen}
+        options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="TransactionDetail"
@@ -59,6 +77,13 @@ export const RootNavigator = () => {
         }}
       />
       <Stack.Screen
+        name="Budget"
+        component={BudgetScreen}
+        options={{
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen
         name="Transactions"
         component={TransactionsScreen}
         options={{
@@ -66,11 +91,14 @@ export const RootNavigator = () => {
         }}
       />
       <Stack.Screen
-        name="Budget"
-        component={BudgetScreen}
-        options={{
-          animation: 'slide_from_right',
-        }}
+        name="Categories"
+        component={CategoriesScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="Statistics"
+        component={StatisticsScreen}
+        options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="Profile"
@@ -79,8 +107,6 @@ export const RootNavigator = () => {
           animation: 'slide_from_right',
         }}
       />
-      <Stack.Screen name="Categories" component={CategoriesScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="Statistics" component={StatisticsScreen} options={{ animation: 'slide_from_right' }} />
     </Stack.Navigator>
   );
 };

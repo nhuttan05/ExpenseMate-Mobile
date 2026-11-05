@@ -3,8 +3,8 @@ import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
 import { HomeScreen } from '../pages/HomeScreen';
-import { TransactionsScreen } from '../pages/TransactionsScreen';
-import { BudgetScreen } from '../pages/BudgetScreen';
+import { WalletsScreen } from '../pages/WalletsScreen';
+import { WhatIfSimulatorScreen } from '../pages/WhatIfSimulatorScreen';
 import { ProfileScreen } from '../pages/ProfileScreen';
 import { Colors, Shadows } from '../constants/theme';
 
@@ -30,19 +30,19 @@ export const TabNavigator = ({ navigation }: any) => {
         component={HomeScreen}
         options={{
           tabBarLabel: 'Trang chủ',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="home" size={24} color={color} />
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons name="grid-view" size={24} color={color} />
           ),
         }}
       />
 
       <Tab.Screen
-        name="TransactionsTab"
-        component={TransactionsScreen}
+        name="WalletsTab"
+        component={WalletsScreen}
         options={{
-          tabBarLabel: 'Giao dịch',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="receipt-long" size={24} color={color} />
+          tabBarLabel: 'Ví ảo',
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons name="account-balance-wallet" size={24} color={color} />
           ),
         }}
       />
@@ -68,12 +68,12 @@ export const TabNavigator = ({ navigation }: any) => {
       />
 
       <Tab.Screen
-        name="BudgetTab"
-        component={BudgetScreen}
+        name="SimulatorTab"
+        component={WhatIfSimulatorScreen}
         options={{
-          tabBarLabel: 'Ngân sách',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="pie-chart" size={24} color={color} />
+          tabBarLabel: 'What-If AI',
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons name="auto-fix-high" size={24} color={color} />
           ),
         }}
       />
@@ -83,7 +83,7 @@ export const TabNavigator = ({ navigation }: any) => {
         component={ProfileScreen}
         options={{
           tabBarLabel: 'Cá nhân',
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <MaterialIcons name="person" size={24} color={color} />
           ),
         }}
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: Platform.OS === 'ios' ? 84 : 68,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
     borderTopWidth: 1,
     borderTopColor: '#EEF0F7',
     paddingBottom: Platform.OS === 'ios' ? 24 : 10,
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
   },
   tabBarLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     marginTop: 2,
   },
   floatingButtonContainer: {

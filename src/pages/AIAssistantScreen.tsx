@@ -76,7 +76,7 @@ export const AIAssistantScreen: React.FC<AIAssistantScreenProps> = ({ navigation
           monthlyIncome,
           monthlyExpense
         );
-        reply = `Theo tính toán AI từ dữ liệu SQLite:\n• Tổng thu: ${monthlyIncome.toLocaleString('vi-VN')} đ\n• Tổng chi: ${monthlyExpense.toLocaleString('vi-VN')} đ\n• Tỷ lệ tiết kiệm: ${savingsRate}%\n\nĐánh giá:\n${insights.map((i) => `✓ ${i}`).join('\n')}`;
+        reply = `Theo tính toán AI từ dữ liệu SQLite:\n• Tổng thu: ${monthlyIncome.toLocaleString('vi-VN')} đ\n• Tổng chi: ${monthlyExpense.toLocaleString('vi-VN')} đ\n• Tỷ lệ tiết kiệm: ${savingsRate}%\n\nĐánh giá:\n${insights.map((i: string) => `✓ ${i}`).join('\n')}`;
         suggestions = ['Làm sao để tiết kiệm 5 triệu?', 'Hạn mức ăn uống hiện tại'];
       } else if (lower.includes('ăn uống') || lower.includes('ngân sách')) {
         reply =

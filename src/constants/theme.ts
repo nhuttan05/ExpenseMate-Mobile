@@ -1,44 +1,66 @@
 /**
  * Design Tokens for ExpenseMate Mobile App
- * Extracted from Google Stitch Project: ExpenseMate Mobile App Design
- * Style: Modern Neo-Fintech Minimal
+ * Theme: Premium Modern Fintech (Human-Centered Design, Anti AI-Slop)
+ * Palette follows 60-30-10 Golden Rule with WCAG 2.2 contrast compliance.
  */
 
 export const Colors = {
-  // Brand Colors
-  primary: '#4F46E5', // Deep Indigo
-  primaryDark: '#3525CD',
-  primaryLight: '#EEF2FF',
-  primaryFixed: '#E2DFFF',
-  onPrimaryFixed: '#0F0069',
+  // Brand & Fintech Slate
+  primary: '#006C49', // Forest Fintech Emerald
+  primaryDark: '#004D34',
+  primaryLight: '#E6F4EA',
+  primaryAccent: '#059669', // Bright Emerald CTA
+
+  navyDeep: '#0F172A', // Slate-900 (High contrast Net Worth cards)
+  navySurface: '#1E293B', // Slate-800
+  navyMuted: '#334155',
 
   // Status & Financial Indicators
-  secondary: '#006C49', // Emerald Green (Income / Positive Flow)
+  income: '#059669', // Emerald Green (Income / Positive)
+  incomeLight: '#ECFDF5',
+  expense: '#E11D48', // Rose Red (Expense / Outflow)
+  expenseLight: '#FFE4E6',
+  warning: '#D97706', // Amber (Budget alerts >80%)
+  warningLight: '#FEF3C7',
+  info: '#2563EB', // Royal Blue (Savings & Investments)
+  infoLight: '#EFF6FF',
+  purple: '#7C3AED', // Long-term Goals
+  purpleLight: '#F3E8FF',
+  teal: '#0D9488', // Give / Charity
+  tealLight: '#F0FDFA',
+
+  // Backward-compatibility aliases for existing components
+  secondary: '#006C49',
   secondaryLight: '#E6F4EA',
-  secondaryContainer: '#6CF8BB',
-  
-  error: '#BA1A1A', // Coral Red (Expense / Destructive)
-  errorLight: '#FEE2E2',
-  errorContainer: '#FFDAD6',
+  secondaryContainer: '#A7F3D0',
+  error: '#E11D48',
+  errorLight: '#FFE4E6',
+  errorContainer: '#FEE2E2',
 
   // Surfaces & Backgrounds
-  background: '#FAF8FF', // Soft canvas
-  surface: '#FFFFFF', // Pure white card surface
-  surfaceDim: '#D2D9F4',
-  surfaceContainerLow: '#F2F3FF',
-  surfaceContainer: '#EAEDFF',
-  surfaceContainerHigh: '#E2E7FF',
-  surfaceContainerHighest: '#DAE2FD',
+  background: '#F8FAFC', // Slate-50 canvas
+  surface: '#FFFFFF', // Pure porcelain card surface
+  surfaceElevated: '#FFFFFF',
+  surfaceSubtle: '#F1F5F9', // Slate-100
+  surfaceHighlight: '#E2E8F0',
+  surfaceContainerLow: '#F8FAFC',
+  surfaceContainer: '#F1F5F9',
+  surfaceContainerHigh: '#E2E8F0',
+  surfaceContainerHighest: '#CBD5E1',
 
   // Typography Colors
-  textPrimary: '#131B2E', // High contrast slate/navy
-  textSecondary: '#464555', // Slate secondary
-  textMuted: '#777587',
+  textPrimary: '#0F172A', // Slate-900 (High contrast)
+  textSecondary: '#475569', // Slate-600
+  textMuted: '#94A3B8', // Slate-400
   textWhite: '#FFFFFF',
+  primaryFixed: '#E6F4EA',
+  onPrimaryFixed: '#004D34',
 
   // Borders & Dividers
   border: '#E2E8F0',
-  outlineVariant: '#C7C4D8',
+  borderSubtle: '#F1F5F9',
+  borderEmerald: '#A7F3D0',
+  outlineVariant: '#CBD5E1',
 };
 
 export const Spacing = {
@@ -51,10 +73,12 @@ export const Spacing = {
 };
 
 export const BorderRadius = {
-  sm: 4,
-  md: 8,
-  lg: 12,
-  xl: 16,
+  xs: 6,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
   full: 9999,
 };
 
@@ -62,22 +86,36 @@ export const Shadows = {
   subtle: {
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
   card: {
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
     elevation: 3,
   },
+  cardHover: {
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 4,
+  },
   floating: {
-    shadowColor: '#4F46E5',
+    shadowColor: '#006C49',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 6,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  hero: {
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 10,
   },
 };
