@@ -2,6 +2,29 @@ import { Category, Transaction } from '../types';
 import { categories } from '../data/mockData';
 
 export const AIService = {
+  parseNaturalLanguage: (text: string): { title: string; amount: number; category: Category } | null => {
+    const normalized = text.toLowerCase().replace(/,/g, '.');
+    const amountMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(k|nghìn|ngàn|triệu|tr|đ|đồng)?/i);
+    if (!amountMatch || !/(hôm nay|chi|mua|ăn|trả|thanh toán|uống|tiền)/i.test(normalized)) return null;
+
+    const rawAmount = amountMatch[1];
+    const amount = rawAmount.includes('.') && rawAmount.split('.').pop()!.length === 3
+      ? Number(rawAmount.replace(/\./g, ''))
+      : Number(rawAmount);
+    let normalizedAmount = amount;
+    const unit = amountMatch[2];
+    if (unit === 'k' || unit === 'nghìn' || unit === 'ngàn') normalizedAmount *= 1000;
+    if (unit === 'triệu' || unit === 'tr') normalizedAmount *= 1000000;
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) return null;
+
+    const title = text
+      .replace(amountMatch[0], '')
+      .replace(/hôm nay|đồng|vnd/gi, '')
+      .replace(/^[\s,:-]+|[\s,:-]+$/g, '')
+      .trim() || 'Giao dịch từ AI';
+    return { title: title.charAt(0).toUpperCase() + title.slice(1), amount: normalizedAmount, category: AIService.predictCategory(title) };
+  },
+
   /**
    * Basic NLP rule-based category predictor based on transaction title
    */

@@ -28,7 +28,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   const { transactions, totalBalance, monthlyIncome, monthlyExpense, isBalanceVisible } =
     useAppSelector((state) => state.expense);
-  const { budgets } = useAppSelector((state) => state.budget);
 
   const [activeFilter, setActiveFilter] = useState<'WEEK' | 'MONTH'>('WEEK');
 

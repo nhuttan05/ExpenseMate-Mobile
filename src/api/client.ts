@@ -1,8 +1,10 @@
 import axios from 'axios';
 
 // Base Axios instance
+// Axios exposes `create` through its default instance in the React Native bundle.
+// eslint-disable-next-line import/no-named-as-default-member
 export const apiClient = axios.create({
-  baseURL: 'https://api.expensemate.internal/v1',
+  baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api/v1',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

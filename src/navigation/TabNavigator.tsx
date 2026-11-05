@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
 import { HomeScreen } from '../pages/HomeScreen';
 import { TransactionsScreen } from '../pages/TransactionsScreen';
 import { BudgetScreen } from '../pages/BudgetScreen';
 import { ProfileScreen } from '../pages/ProfileScreen';
-import { Colors, Shadows, Spacing, BorderRadius } from '../constants/theme';
+import { Colors, Shadows } from '../constants/theme';
 
 const Tab = createBottomTabNavigator();
 

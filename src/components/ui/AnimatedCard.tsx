@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Animated, ViewStyle, StyleProp } from 'react-native';
 
 interface AnimatedCardProps {
@@ -8,8 +8,8 @@ interface AnimatedCardProps {
 }
 
 export const AnimatedCard: React.FC<AnimatedCardProps> = ({ children, style, delay = 0 }) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(14)).current;
+  const [fadeAnim] = useState(() => new Animated.Value(0));
+  const [translateY] = useState(() => new Animated.Value(14));
 
   useEffect(() => {
     Animated.parallel([
