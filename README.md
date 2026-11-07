@@ -70,9 +70,22 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Kiểm tra API tại `http://localhost:3000/health`. Auth contract nằm ở `backend/openapi.yaml`.
+Kiểm tra API tại `http://localhost:3000/health`. Contract đầy đủ nằm ở `backend/openapi.yaml`.
 
-Để Expo trên điện thoại thật gọi được backend trên máy tính, tạo file `.env` từ `.env.example` và thay `YOUR_COMPUTER_LAN_IP` bằng IP LAN của máy tính, sau đó khởi động lại Expo.
+Backend hiện có các nhóm API:
+
+- `auth`: đăng ký, đăng nhập, refresh/logout, hồ sơ và yêu cầu đặt lại mật khẩu.
+- `transactions`: CRUD giao dịch, lọc/phân trang và soft delete.
+- `sync/transactions`: đồng bộ giao dịch offline theo `clientId` idempotent.
+- `categories`, `budgets`, `notifications`: dữ liệu cá nhân được giới hạn theo JWT user.
+- `analytics/monthly`: tổng thu/chi, nhóm chi, khoản chi lớn nhất, cảnh báo ngân sách và nhận xét tài chính cơ bản.
+- `wallets`, `wallets/jars`: quản lý ví, chuyển tiền atomically và phân bổ 6 hũ tài chính.
+- `recurring`, `debts`: khoản định kỳ, trạng thái tạm dừng và sổ công nợ.
+- `scenarios`, `challenges`, `analytics/health`: mô phỏng what-if, check-in thử thách và điểm sức khỏe tài chính.
+
+PostgreSQL chạy trong container với cổng host `5433` (container `5432`); backend chạy ở cổng `3000`.
+
+Khi chạy Expo Web trên chính máy tính, app tự dùng hostname hiện tại và backend ở cổng `3000`. Nếu chạy trên điện thoại thật, tạo file `.env` từ `.env.example`, thay `YOUR_COMPUTER_LAN_IP` bằng IPv4 của máy tính (ví dụ `192.168.1.10`), rồi khởi động lại Expo bằng `npx expo start -c`. Điện thoại và máy tính phải cùng mạng LAN; không dùng `localhost` trên điện thoại.
 
 ---
 

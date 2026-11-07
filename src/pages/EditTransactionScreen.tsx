@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Shadows, Spacing } from '../constants/theme';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
@@ -7,6 +7,7 @@ import { useAppDispatch } from '../redux/store';
 import { updateTransactionAsync } from '../redux/slices/expenseSlice';
 import { categories } from '../data/mockData';
 import { Transaction } from '../types';
+import { showAppNotice } from '../utils/appNotice';
 
 interface EditTransactionScreenProps { route?: any; navigation?: any; }
 
@@ -17,6 +18,7 @@ export const EditTransactionScreen: React.FC<EditTransactionScreenProps> = ({ ro
   const [amount, setAmount] = useState(transaction?.amount ? String(transaction.amount) : '');
   const [note, setNote] = useState(transaction?.note || '');
   const [categoryId, setCategoryId] = useState(transaction?.category.id || categories[0].id);
+  const [saving, setSaving] = useState(false);
 
   if (!transaction) {
     return <ScreenContainer><Text style={styles.missing}>Không tìm thấy giao dịch.</Text></ScreenContainer>;
@@ -28,11 +30,18 @@ export const EditTransactionScreen: React.FC<EditTransactionScreenProps> = ({ ro
   const handleSave = async () => {
     const numericAmount = Number(amount.replace(/[^0-9]/g, ''));
     if (!title.trim() || !numericAmount || numericAmount <= 0) {
-      Alert.alert('Thông tin chưa hợp lệ', 'Vui lòng nhập tên và số tiền lớn hơn 0.');
+      showAppNotice('Thông tin chưa hợp lệ', 'Vui lòng nhập tên và số tiền lớn hơn 0.');
       return;
     }
-    await dispatch(updateTransactionAsync({ ...transaction, title: title.trim(), amount: numericAmount, note: note.trim() || undefined, category: selectedCategory })).unwrap();
-    Alert.alert('Đã cập nhật', 'Giao dịch đã được lưu vào SQLite.', [{ text: 'OK', onPress: () => navigation?.goBack() }]);
+    setSaving(true);
+    try {
+      await dispatch(updateTransactionAsync({ ...transaction, title: title.trim(), amount: numericAmount, note: note.trim() || undefined, category: selectedCategory })).unwrap();
+      showAppNotice('Cập nhật thành công', 'Giao dịch đã được cập nhật dữ liệu.', () => navigation?.goBack());
+    } catch (error: any) {
+      showAppNotice('Cập nhật thất bại', error?.message || 'Không thể cập nhật giao dịch. Vui lòng thử lại.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -45,7 +54,7 @@ export const EditTransactionScreen: React.FC<EditTransactionScreenProps> = ({ ro
         <Text style={styles.label}>Danh mục</Text>
         <View style={styles.categoryGrid}>{availableCategories.map((item) => <TouchableOpacity key={item.id} onPress={() => setCategoryId(item.id)} style={[styles.categoryChip, categoryId === item.id && styles.categoryChipActive]}><MaterialIcons name={item.icon as any} size={18} color={categoryId === item.id ? Colors.textWhite : item.color} /><Text style={[styles.categoryText, categoryId === item.id && styles.categoryTextActive]}>{item.name}</Text></TouchableOpacity>)}</View>
         <Text style={styles.label}>Ghi chú</Text><TextInput style={[styles.input, styles.noteInput]} value={note} onChangeText={setNote} multiline placeholder="Thêm ghi chú..." placeholderTextColor={Colors.textMuted} />
-        <TouchableOpacity style={[styles.saveButton, Shadows.subtle]} onPress={handleSave}><Text style={styles.saveButtonText}>Lưu thay đổi</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.saveButton, Shadows.subtle]} onPress={handleSave} disabled={saving}><Text style={styles.saveButtonText}>{saving ? 'Đang cập nhật...' : 'Lưu thay đổi'}</Text></TouchableOpacity>
       </View>
     </ScreenContainer>
   );

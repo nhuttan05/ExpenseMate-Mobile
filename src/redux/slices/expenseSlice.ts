@@ -2,6 +2,8 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { Transaction } from '../../types';
 import { fetchAllTransactions, insertTransaction, updateTransaction } from '../../services/database';
 import { mockUser } from '../../data/mockData';
+import { ApiService } from '../../services/apiService';
+import { getApiAccessToken } from '../../api/client';
 
 interface ExpenseState {
   transactions: Transaction[];
@@ -37,6 +39,13 @@ export const addTransactionAsync = createAsyncThunk(
       id: `tx_${Date.now()}`,
     };
     await insertTransaction(newTx);
+    if (getApiAccessToken()) {
+      try {
+        await ApiService.syncLocalToCloud([newTx]);
+      } catch (error) {
+        console.warn('[Expense] Local transaction saved, cloud sync pending:', error);
+      }
+    }
     return newTx;
   }
 );
@@ -45,6 +54,13 @@ export const updateTransactionAsync = createAsyncThunk(
   'expense/updateTransaction',
   async (transaction: Transaction) => {
     await updateTransaction(transaction);
+    if (getApiAccessToken()) {
+      try {
+        await ApiService.syncLocalToCloud([transaction]);
+      } catch (error) {
+        console.warn('[Expense] Local update saved, cloud sync pending:', error);
+      }
+    }
     return transaction;
   }
 );

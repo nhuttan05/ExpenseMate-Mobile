@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Shadows, Spacing } from '../constants/theme';
 import { AuthApi } from '../api/authApi';
+import { showAppNotice } from '../utils/appNotice';
 
 interface LoginScreenProps { navigation: any; }
 
@@ -13,25 +14,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập email và mật khẩu.');
+      showAppNotice('Thiếu thông tin', 'Vui lòng nhập email và mật khẩu.');
       return;
     }
 
     setLoading(true);
     try {
       await AuthApi.login(email.trim(), password);
-      navigation.replace('Main');
+      showAppNotice('Đăng nhập thành công', 'Chào mừng bạn quay lại ExpenseMate.', () => navigation.replace('Main'));
     } catch (error: any) {
-      // Cho phép đăng nhập demo offline nếu backend chưa mở hoặc lỗi mạng
-      if (email.trim().toLowerCase() === 'demo@expensemate.com' && (password === 'Password123!' || password === '123456')) {
-        navigation.replace('Main');
-        return;
-      }
-      const message = error?.response?.data?.error?.message || 'Không thể kết nối backend. Bạn có thể dùng tài khoản demo hoặc chế độ Khách bên dưới.';
-      Alert.alert('Đăng nhập thất bại', message, [
-        { text: 'Đóng', style: 'cancel' },
-        { text: 'Vào chế độ Khách', onPress: () => navigation.replace('Main') },
-      ]);
+      const message = error?.response?.data?.error?.message || 'Không thể kết nối backend. Hãy kiểm tra Docker và địa chỉ API.';
+      showAppNotice('Đăng nhập thất bại', message);
     } finally {
       setLoading(false);
     }

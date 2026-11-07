@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Animated, ViewStyle, StyleProp } from 'react-native';
+import { Animated, Platform, ViewStyle, StyleProp } from 'react-native';
 
 interface AnimatedCardProps {
   children: React.ReactNode;
@@ -17,13 +17,13 @@ export const AnimatedCard: React.FC<AnimatedCardProps> = ({ children, style, del
         toValue: 1,
         duration: 350,
         delay,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(translateY, {
         toValue: 0,
         duration: 350,
         delay,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
   }, [delay, fadeAnim, translateY]);

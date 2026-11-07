@@ -41,16 +41,8 @@ export const getExchangeRates = async (): Promise<Record<string, number>> => {
  * Sync local transactions with cloud server via Axios
  */
 export const syncTransactions = async (transactions: Transaction[]): Promise<{ success: boolean; count: number }> => {
-  try {
-    const response = await apiClient.post('/sync/transactions', { transactions });
-    return response.data;
-  } catch {
-    // Simulated cloud backup response for demonstration
-    return {
-      success: true,
-      count: transactions.length,
-    };
-  }
+  const response = await apiClient.post<{ success: boolean; count: number }>('/sync/transactions', { transactions });
+  return response.data;
 };
 
 /**

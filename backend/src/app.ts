@@ -6,6 +6,16 @@ import { config } from './config';
 import { query } from './db';
 import { errorHandler, notFoundHandler } from './errors';
 import authRouter from './routes/auth.routes';
+import transactionsRouter from './routes/transactions.routes';
+import categoriesRouter from './routes/categories.routes';
+import budgetsRouter from './routes/budgets.routes';
+import notificationsRouter from './routes/notifications.routes';
+import analyticsRouter from './routes/analytics.routes';
+import { requireAuth } from './middleware/auth.middleware';
+import { syncTransactionsHandler } from './routes/transactions.routes';
+import walletsRouter from './routes/wallets.routes';
+import recurringRouter from './routes/recurring.routes';
+import planningRouter from './routes/planning.routes';
 
 export const app = express();
 
@@ -23,5 +33,17 @@ app.get('/health', async (_req, res, next) => {
 });
 
 app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/transactions', transactionsRouter);
+const syncRouter = express.Router();
+syncRouter.use(requireAuth);
+syncRouter.post('/transactions', syncTransactionsHandler);
+app.use('/api/v1/sync', syncRouter);
+app.use('/api/v1/categories', categoriesRouter);
+app.use('/api/v1/budgets', budgetsRouter);
+app.use('/api/v1/notifications', notificationsRouter);
+app.use('/api/v1/analytics', analyticsRouter);
+app.use('/api/v1/wallets', walletsRouter);
+app.use('/api/v1/recurring', recurringRouter);
+app.use('/api/v1', planningRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);

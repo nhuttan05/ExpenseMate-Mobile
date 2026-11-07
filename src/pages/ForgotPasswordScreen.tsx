@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Shadows, Spacing } from '../constants/theme';
 import { AuthApi } from '../api/authApi';
+import { showAppNotice } from '../utils/appNotice';
 
 interface ForgotPasswordScreenProps { navigation: any; }
 
 export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const handleReset = async () => {
-    if (!email.trim()) { Alert.alert('Thiếu email', 'Vui lòng nhập email đã đăng ký.'); return; }
+    if (!email.trim()) { showAppNotice('Thiếu email', 'Vui lòng nhập email đã đăng ký.'); return; }
     try {
       const message = await AuthApi.requestPasswordReset(email.trim());
-      Alert.alert('Đã gửi hướng dẫn', message, [{ text: 'Quay lại đăng nhập', onPress: () => navigation.navigate('Login') }]);
+      showAppNotice('Đã gửi hướng dẫn', message, () => navigation.navigate('Login'));
     } catch (error: any) {
-      Alert.alert('Không thể gửi yêu cầu', error?.response?.data?.error?.message || 'Không thể kết nối backend.');
+      showAppNotice('Không thể gửi yêu cầu', error?.response?.data?.error?.message || 'Không thể kết nối backend.');
     }
   };
   return (

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Shadows, Spacing } from '../constants/theme';
 import { AuthApi } from '../api/authApi';
+import { showAppNotice } from '../utils/appNotice';
 
 interface RegisterScreenProps { navigation: any; }
 
@@ -14,16 +15,16 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
 
   const handleRegister = async () => {
     if (!name.trim() || !email.trim() || password.length < 8) {
-      Alert.alert('Thông tin chưa hợp lệ', 'Hãy nhập đủ thông tin và mật khẩu tối thiểu 8 ký tự.');
+      showAppNotice('Thông tin chưa hợp lệ', 'Hãy nhập đủ thông tin và mật khẩu tối thiểu 8 ký tự.');
       return;
     }
     setLoading(true);
     try {
       await AuthApi.register(name.trim(), email.trim(), password);
-      Alert.alert('Đăng ký thành công', 'Tài khoản đã được tạo trên backend.', [{ text: 'Bắt đầu', onPress: () => navigation.replace('Main') }]);
+      showAppNotice('Đăng ký thành công', 'Tài khoản đã được tạo trên backend.', () => navigation.replace('Main'));
     } catch (error: any) {
       const message = error?.response?.data?.error?.message || 'Không thể kết nối backend. Hãy kiểm tra Docker và địa chỉ API.';
-      Alert.alert('Đăng ký thất bại', message);
+      showAppNotice('Đăng ký thất bại', message);
     } finally {
       setLoading(false);
     }

@@ -20,7 +20,7 @@ import {
 } from '../redux/slices/walletSlice';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
 import { AnimatedCard } from '../components/ui/AnimatedCard';
-import { Wallet, WalletType } from '../types';
+import { WalletType } from '../types';
 
 interface WalletsScreenProps {
   navigation: any;
@@ -31,7 +31,7 @@ export const WalletsScreen: React.FC<WalletsScreenProps> = ({ navigation, route 
   const dispatch = useAppDispatch();
   const { wallets } = useAppSelector((state) => state.wallet);
 
-  const [transferModalVisible, setTransferModalVisible] = useState(false);
+  const [transferModalVisible, setTransferModalVisible] = useState(Boolean(route?.params?.openTransferModal));
   const [addWalletModalVisible, setAddWalletModalVisible] = useState(false);
 
   // Transfer Form State
@@ -50,9 +50,6 @@ export const WalletsScreen: React.FC<WalletsScreenProps> = ({ navigation, route 
 
   useEffect(() => {
     dispatch(loadWalletsAndJars());
-    if (route?.params?.openTransferModal) {
-      setTransferModalVisible(true);
-    }
   }, [dispatch, route?.params?.openTransferModal]);
 
   const totalLiquidBalance = wallets
@@ -98,7 +95,7 @@ export const WalletsScreen: React.FC<WalletsScreenProps> = ({ navigation, route 
       setTransferModalVisible(false);
       setTransferAmount('');
       setTransferNote('');
-    } catch (err) {
+    } catch {
       Alert.alert('Lỗi', 'Không thể hoàn tất giao dịch chuyển ví.');
     } finally {
       setTransferLoading(false);

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -16,6 +15,7 @@ import { categories } from '../data/mockData';
 import { Category, TransactionType, JarCode } from '../types';
 import { AIService } from '../services/aiService';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
+import { showAppNotice } from '../utils/appNotice';
 
 interface AddTransactionScreenProps {
   navigation: any;
@@ -34,6 +34,7 @@ export const AddTransactionScreen: React.FC<AddTransactionScreenProps> = ({ navi
   const [selectedJarCode, setSelectedJarCode] = useState<JarCode>('NEC');
   const [aiNaturalInput, setAiNaturalInput] = useState('');
   const [aiSuggested, setAiSuggested] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const filteredCategories = categories.filter((c) => c.type === type);
 
@@ -42,7 +43,7 @@ export const AddTransactionScreen: React.FC<AddTransactionScreenProps> = ({ navi
     if (!aiNaturalInput.trim()) return;
     const parsed = AIService.parseNaturalLanguage(aiNaturalInput.trim(), wallets);
     if (!parsed) {
-      Alert.alert(
+      showAppNotice(
         'Không nhận diện được',
         'Vui lòng nhập rõ số tiền và nội dung (Ví dụ: "Hôm nay ăn phở 65k trừ ví momo").'
       );
@@ -56,7 +57,7 @@ export const AddTransactionScreen: React.FC<AddTransactionScreenProps> = ({ navi
     setSelectedJarCode(parsed.jarCode);
     setAiSuggested(true);
     setAiNaturalInput('');
-    Alert.alert('✨ AI Đã Tự Động Phân Loại', `Tiêu đề: ${parsed.title}\nSố tiền: ${parsed.amount.toLocaleString('vi-VN')} đ\nDanh mục: ${parsed.category.name}\nVí trừ tiền: ${wallets.find(w => w.id === parsed.walletId)?.name || 'Mặc định'}\nHũ JARS: ${parsed.jarCode}`);
+    showAppNotice('✨ AI Đã Tự Động Phân Loại', `Tiêu đề: ${parsed.title}\nSố tiền: ${parsed.amount.toLocaleString('vi-VN')} đ\nDanh mục: ${parsed.category.name}\nVí trừ tiền: ${wallets.find(w => w.id === parsed.walletId)?.name || 'Mặc định'}\nHũ JARS: ${parsed.jarCode}`);
   };
 
   const handleTitleChange = (text: string) => {
@@ -77,37 +78,42 @@ export const AddTransactionScreen: React.FC<AddTransactionScreenProps> = ({ navi
     setAmountStr(next.toLocaleString('vi-VN'));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const numericAmount = parseFloat(amountStr.replace(/[^0-9]/g, ''));
     if (!numericAmount || numericAmount <= 0) {
-      Alert.alert('Thông báo', 'Vui lòng nhập số tiền hợp lệ lớn hơn 0.');
+      showAppNotice('Thông báo', 'Vui lòng nhập số tiền hợp lệ lớn hơn 0.');
       return;
     }
     if (!title.trim()) {
-      Alert.alert('Thông báo', 'Vui lòng nhập tên giao dịch (ví dụ: Ăn trưa, Tiền xăng...).');
+      showAppNotice('Thông báo', 'Vui lòng nhập tên giao dịch (ví dụ: Ăn trưa, Tiền xăng...).');
       return;
     }
 
     const selectedWallet = wallets.find((w) => w.id === selectedWalletId);
 
-    dispatch(
-      addTransactionAsync({
-        title: title.trim(),
-        amount: numericAmount,
-        type,
-        category: selectedCategory,
-        date: new Date().toISOString().split('T')[0],
-        formattedTime: 'Vừa xong',
-        paymentMethod: selectedWallet?.name || 'Tiền mặt',
-        walletId: selectedWalletId,
-        jarCode: type === 'EXPENSE' ? selectedJarCode : undefined,
-        note: note.trim() || undefined,
-      })
-    );
+    setSaving(true);
+    try {
+      await dispatch(
+        addTransactionAsync({
+          title: title.trim(),
+          amount: numericAmount,
+          type,
+          category: selectedCategory,
+          date: new Date().toISOString().split('T')[0],
+          formattedTime: 'Vừa xong',
+          paymentMethod: selectedWallet?.name || 'Tiền mặt',
+          walletId: selectedWalletId,
+          jarCode: type === 'EXPENSE' ? selectedJarCode : undefined,
+          note: note.trim() || undefined,
+        })
+      ).unwrap();
 
-    Alert.alert('Thành công', 'Đã lưu giao dịch vào SQLite Database & Cập nhật số dư ví!', [
-      { text: 'OK', onPress: () => navigation.goBack() },
-    ]);
+      showAppNotice('Lưu thành công', 'Giao dịch đã được lưu và số dư đã được cập nhật.', () => navigation.goBack());
+    } catch (error: any) {
+      showAppNotice('Lưu giao dịch thất bại', error?.message || 'Không thể lưu giao dịch. Vui lòng thử lại.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAmountChange = (text: string) => {
@@ -347,9 +353,9 @@ export const AddTransactionScreen: React.FC<AddTransactionScreenProps> = ({ navi
         </View>
 
         {/* Save Button */}
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving} activeOpacity={0.85}>
           <MaterialIcons name="check" size={22} color={Colors.textWhite} />
-          <Text style={styles.saveButtonText}>Lưu giao dịch</Text>
+          <Text style={styles.saveButtonText}>{saving ? 'Đang lưu...' : 'Lưu giao dịch'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </ScreenContainer>

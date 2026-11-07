@@ -29,15 +29,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const handleSyncCloud = async () => {
+    if (!AuthApi.getAccessToken()) {
+      Alert.alert('Đang dùng chế độ khách', 'Dữ liệu hiện được lưu trên thiết bị. Hãy đăng nhập để đồng bộ lên backend.');
+      return;
+    }
     setIsSyncing(true);
     try {
       const res = await ApiService.syncLocalToCloud(transactions);
       Alert.alert(
-        'Đồng bộ Axios thành công',
-        `Đã đồng bộ ${res.count} giao dịch từ SQLite lên hệ thống lưu trữ qua Axios.`
+        'Đồng bộ thành công',
+        `Đã đồng bộ ${res.count} giao dịch từ thiết bị lên backend.`
       );
-    } catch {
-      Alert.alert('Thông báo', 'Đã lưu trữ dữ liệu an toàn trên thiết bị.');
+    } catch (error: any) {
+      Alert.alert('Đồng bộ thất bại', error?.response?.data?.error?.message || 'Không thể đồng bộ lúc này. Dữ liệu trên thiết bị vẫn được giữ nguyên.');
     } finally {
       setIsSyncing(false);
     }

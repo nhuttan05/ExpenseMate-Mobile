@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, setApiAccessToken } from './client';
 
 export interface AuthUser {
   id: string;
@@ -20,6 +20,7 @@ let currentSession: AuthSession | null = null;
 
 const setSession = (session: AuthSession) => {
   currentSession = session;
+  setApiAccessToken(session.accessToken);
   return session;
 };
 
@@ -48,6 +49,7 @@ export const AuthApi = {
         // Clear the local session even when the device is offline.
       } finally {
         currentSession = null;
+        setApiAccessToken(null);
       }
     }
   },

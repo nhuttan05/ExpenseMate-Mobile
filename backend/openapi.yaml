@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: ExpenseMate Auth API
-  version: 1.0.0
-  description: Authentication contract for the ExpenseMate mobile application.
+  title: ExpenseMate API
+  version: 1.2.0
+  description: Backend contract for authentication, personal finance data, sync and analytics.
 servers:
   - url: http://localhost:3000
 paths:
@@ -91,6 +91,335 @@ paths:
       responses:
         '200':
           description: Generic response that does not reveal whether the email exists
+  /api/v1/categories:
+    get:
+      summary: List system and user categories
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: type, in: query, schema: { type: string, enum: [INCOME, EXPENSE] } }
+      responses:
+        '200': { description: Category list }
+    post:
+      summary: Create a custom category
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/CategoryInput' } }
+      responses:
+        '201': { description: Created category }
+  /api/v1/categories/{id}:
+    patch:
+      summary: Update a custom category
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/CategoryInput' } }
+      responses:
+        '200': { description: Updated category }
+    delete:
+      summary: Archive a custom category
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '204': { description: Archived }
+  /api/v1/transactions:
+    get:
+      summary: List the current user's transactions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: type, in: query, schema: { type: string, enum: [INCOME, EXPENSE, TRANSFER] } }
+        - { name: categoryId, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: search, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Paginated transactions }
+    post:
+      summary: Create a transaction
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/TransactionInput' } }
+      responses:
+        '201': { description: Created transaction }
+  /api/v1/transactions/{id}:
+    get:
+      summary: Get a transaction
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: Transaction }
+    patch:
+      summary: Update a transaction
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/TransactionPatch' } }
+      responses:
+        '200': { description: Updated transaction }
+    delete:
+      summary: Soft-delete a transaction
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '204': { description: Deleted }
+  /api/v1/sync/transactions:
+    post:
+      summary: Idempotently sync local transactions
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transactions]
+              properties:
+                transactions:
+                  type: array
+                  maxItems: 500
+                  items: { $ref: '#/components/schemas/TransactionInput' }
+      responses:
+        '200': { description: Sync result }
+  /api/v1/budgets:
+    get:
+      summary: List monthly budgets
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: month, in: query, schema: { type: string, example: '2026-11' } }]
+      responses:
+        '200': { description: Budgets with calculated spent amount }
+    post:
+      summary: Create a monthly category budget
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/BudgetInput' } }
+      responses:
+        '201': { description: Created budget }
+  /api/v1/budgets/{id}:
+    patch:
+      summary: Update a monthly budget
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/BudgetInput' } }
+      responses:
+        '200': { description: Updated budget }
+    delete:
+      summary: Archive a monthly budget
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '204': { description: Archived }
+  /api/v1/notifications:
+    get:
+      summary: List notifications
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: unreadOnly, in: query, schema: { type: boolean } }]
+      responses:
+        '200': { description: Notifications }
+    post:
+      summary: Create a reminder notification
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/NotificationInput' } }
+      responses:
+        '201': { description: Created notification }
+  /api/v1/notifications/{id}/read:
+    patch:
+      summary: Mark a notification as read
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: Updated notification }
+  /api/v1/notifications/read-all:
+    post:
+      summary: Mark all notifications as read
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Number of notifications updated }
+  /api/v1/analytics/monthly:
+    get:
+      summary: Monthly totals, category breakdown, budget alerts and basic AI insights
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: month, in: query, schema: { type: string, example: '2026-11' } }]
+      responses:
+        '200': { description: Monthly analytics }
+  /api/v1/analytics/health:
+    get:
+      summary: Financial health score and recommendations
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Financial health summary }
+  /api/v1/wallets:
+    get:
+      summary: List wallets
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Wallet list }
+    post:
+      summary: Create a wallet
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/WalletInput' } }
+      responses:
+        '201': { description: Created wallet }
+  /api/v1/wallets/{id}:
+    patch:
+      summary: Update a wallet
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/WalletInput' } }
+      responses:
+        '200': { description: Updated wallet }
+    delete:
+      summary: Archive a wallet
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '204': { description: Archived }
+  /api/v1/wallets/{id}/transfer:
+    post:
+      summary: Transfer money between wallets atomically
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/TransferInput' } }
+      responses:
+        '200': { description: Transfer completed }
+  /api/v1/wallets/jars:
+    get:
+      summary: List six financial jars
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Jar list }
+  /api/v1/wallets/jars/{code}:
+    patch:
+      summary: Update jar allocation
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [percentage, allocatedAmount]
+              properties:
+                percentage: { type: number, minimum: 0, maximum: 100 }
+                allocatedAmount: { type: number, minimum: 0 }
+      responses:
+        '200': { description: Updated jar }
+  /api/v1/recurring:
+    get:
+      summary: List recurring transactions
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Recurring transaction list }
+    post:
+      summary: Create recurring transaction
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/RecurringInput' } }
+      responses:
+        '201': { description: Created recurring transaction }
+  /api/v1/recurring/{id}:
+    patch:
+      summary: Update recurring transaction
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/RecurringInput' } }
+      responses:
+        '200': { description: Updated recurring transaction }
+    delete:
+      summary: Archive recurring transaction
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '204': { description: Archived }
+  /api/v1/recurring/{id}/toggle:
+    post:
+      summary: Toggle active/paused status
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Updated status }
+  /api/v1/debts:
+    get:
+      summary: List debts and loans
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Debt list }
+    post:
+      summary: Create debt or loan
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/DebtInput' } }
+      responses:
+        '201': { description: Created debt }
+  /api/v1/debts/{id}/settle:
+    post:
+      summary: Settle a debt
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Settled debt }
+  /api/v1/scenarios:
+    get:
+      summary: List what-if scenarios
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Scenario list }
+  /api/v1/scenarios/simulate:
+    post:
+      summary: Calculate and save a what-if scenario
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/ScenarioInput' } }
+      responses:
+        '201': { description: Created scenario }
+  /api/v1/challenges:
+    get:
+      summary: List financial challenges
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Challenge list }
+  /api/v1/challenges/{id}/check-in:
+    post:
+      summary: Check in one challenge day
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Updated challenge }
 components:
   securitySchemes:
     bearerAuth:
@@ -123,6 +452,111 @@ components:
       required: [refreshToken]
       properties:
         refreshToken: { type: string }
+    CategoryInput:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        icon: { type: string }
+        color: { type: string }
+        backgroundColor: { type: string }
+        type: { type: string, enum: [INCOME, EXPENSE] }
+    TransactionInput:
+      type: object
+      required: [title, type, amount, date]
+      properties:
+        title: { type: string }
+        type: { type: string, enum: [INCOME, EXPENSE, TRANSFER] }
+        amount: { type: number, exclusiveMinimum: 0 }
+        categoryId: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+        date: { type: string, format: date }
+        paymentMethod: { type: string, default: CASH }
+        walletId: { type: string, nullable: true }
+        targetWalletId: { type: string, nullable: true }
+        clientId: { type: string, nullable: true }
+        attachments: { type: array, items: { type: string } }
+    TransactionPatch:
+      allOf:
+        - $ref: '#/components/schemas/TransactionInput'
+    BudgetInput:
+      type: object
+      required: [categoryId, month, allocatedAmount]
+      properties:
+        categoryId: { type: string }
+        month: { type: string, example: '2026-11' }
+        allocatedAmount: { type: number, minimum: 0 }
+        color: { type: string }
+    NotificationInput:
+      type: object
+      required: [title, message]
+      properties:
+        title: { type: string }
+        message: { type: string }
+        type: { type: string, default: INFO }
+        dueAt: { type: string, format: date-time, nullable: true }
+    WalletInput:
+      type: object
+      required: [name, type, balance]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [CASH, BANK, E_WALLET, SAVINGS, CREDIT] }
+        balance: { type: number }
+        currency: { type: string }
+        icon: { type: string }
+        color: { type: string }
+        backgroundColor: { type: string }
+        accountNumber: { type: string, nullable: true }
+        creditLimit: { type: number, nullable: true }
+        isExcludedFromTotal: { type: boolean }
+    TransferInput:
+      type: object
+      required: [toWalletId, amount]
+      properties:
+        toWalletId: { type: string }
+        amount: { type: number, exclusiveMinimum: 0 }
+        fee: { type: number, minimum: 0 }
+        note: { type: string, nullable: true }
+    RecurringInput:
+      type: object
+      required: [title, amount, type, categoryId, walletId, frequency, dayOfMonth, nextDueDate]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        amount: { type: number, exclusiveMinimum: 0 }
+        type: { type: string, enum: [EXPENSE, INCOME] }
+        categoryId: { type: string }
+        walletId: { type: string }
+        frequency: { type: string, enum: [DAILY, WEEKLY, MONTHLY, YEARLY] }
+        dayOfMonth: { type: integer, minimum: 1, maximum: 31 }
+        status: { type: string, enum: [ACTIVE, PAUSED] }
+        nextDueDate: { type: string, format: date }
+        note: { type: string, nullable: true }
+    DebtInput:
+      type: object
+      required: [personName, amount, type, dueDate]
+      properties:
+        id: { type: string }
+        personName: { type: string }
+        amount: { type: number, exclusiveMinimum: 0 }
+        type: { type: string, enum: [LENT, BORROWED] }
+        dueDate: { type: string, format: date }
+        status: { type: string, enum: [PENDING, SETTLED] }
+        note: { type: string, nullable: true }
+        phoneNumber: { type: string, nullable: true }
+    ScenarioInput:
+      type: object
+      required: [title, targetAmount, durationMonths, income, expense, balance]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        targetAmount: { type: number, exclusiveMinimum: 0 }
+        durationMonths: { type: integer, minimum: 1 }
+        income: { type: number, minimum: 0 }
+        expense: { type: number, minimum: 0 }
+        balance: { type: number }
+        category: { type: string }
   responses:
     AuthResponse:
       description: User and token pair
