@@ -8,6 +8,8 @@ import {
 } from '../../services/database';
 import { initialScenarios, initialHealth, initialChallenges } from '../../data/mockData';
 import { AIService } from '../../services/aiService';
+import { FinanceApi } from '../../api/financeApi';
+import { getApiAccessToken } from '../../api/client';
 
 interface SimulationState {
   scenarios: WhatIfScenario[];
@@ -24,8 +26,18 @@ const initialState: SimulationState = {
 };
 
 export const loadSimulationData = createAsyncThunk('simulation/loadAll', async () => {
-  const [scenarios, challenges] = await Promise.all([fetchAllScenarios(), fetchAllChallenges()]);
-  return { scenarios, challenges };
+  const [localScenarios, localChallenges] = await Promise.all([fetchAllScenarios(), fetchAllChallenges()]);
+  if (!getApiAccessToken()) return { scenarios: localScenarios, challenges: localChallenges };
+
+  try {
+    const [remoteScenarios, remoteChallenges] = await Promise.all([FinanceApi.listScenarios(), FinanceApi.listChallenges()]);
+    return {
+      scenarios: remoteScenarios.length > 0 ? remoteScenarios : localScenarios,
+      challenges: remoteChallenges.length > 0 ? remoteChallenges : localChallenges,
+    };
+  } catch {
+    return { scenarios: localScenarios, challenges: localChallenges };
+  }
 });
 
 export const createWhatIfScenarioAsync = createAsyncThunk(
@@ -47,13 +59,30 @@ export const createWhatIfScenarioAsync = createAsyncThunk(
   }) => {
     const scenario = AIService.simulateWhatIfScenario(title, amount, durationMonths, income, expense, balance);
     await insertScenario(scenario);
+    if (getApiAccessToken()) {
+      try {
+        return await FinanceApi.simulateScenario({
+          id: scenario.id,
+          title,
+          targetAmount: amount,
+          durationMonths,
+          income,
+          expense,
+          balance,
+          category: scenario.category,
+        });
+      } catch { /* Local-first offline fallback. */ }
+    }
     return scenario;
   }
 );
 
 export const checkInChallengeAsync = createAsyncThunk('simulation/checkInChallenge', async (id: string) => {
   await updateChallengeProgress(id);
-  return id;
+  if (getApiAccessToken()) {
+    try { return { id, challenge: await FinanceApi.checkInChallenge(id) }; } catch { /* Local-first offline fallback. */ }
+  }
+  return { id };
 });
 
 export const simulationSlice = createSlice({
@@ -81,11 +110,12 @@ export const simulationSlice = createSlice({
         state.scenarios.unshift(action.payload);
       })
       .addCase(checkInChallengeAsync.fulfilled, (state, action) => {
-        const ch = state.challenges.find((c) => c.id === action.payload);
+        const ch = state.challenges.find((c) => c.id === action.payload.id);
         if (ch) {
-          ch.currentDays = Math.min(ch.targetDays, ch.currentDays + 1);
-          if (ch.currentDays >= ch.targetDays) {
-            ch.status = 'COMPLETED';
+          if (action.payload.challenge) Object.assign(ch, action.payload.challenge);
+          else {
+            ch.currentDays = Math.min(ch.targetDays, ch.currentDays + 1);
+            if (ch.currentDays >= ch.targetDays) ch.status = 'COMPLETED';
           }
         }
       });

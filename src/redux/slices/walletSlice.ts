@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { Wallet, JarEnvelope, Transaction } from '../../types';
+import { Wallet, JarEnvelope } from '../../types';
 import {
   fetchAllWallets,
   insertWallet,
@@ -8,6 +8,8 @@ import {
   updateJarAllocation,
 } from '../../services/database';
 import { initialWallets, initialJars } from '../../data/mockData';
+import { FinanceApi } from '../../api/financeApi';
+import { getApiAccessToken } from '../../api/client';
 
 interface WalletState {
   wallets: Wallet[];
@@ -26,8 +28,23 @@ const initialState: WalletState = {
 };
 
 export const loadWalletsAndJars = createAsyncThunk('wallet/loadWalletsAndJars', async () => {
-  const [wallets, jars] = await Promise.all([fetchAllWallets(), fetchAllJars()]);
-  return { wallets, jars };
+  const [localWallets, localJars] = await Promise.all([fetchAllWallets(), fetchAllJars()]);
+  if (!getApiAccessToken()) return { wallets: localWallets, jars: localJars };
+
+  try {
+    const [remoteWallets, remoteJars] = await Promise.all([FinanceApi.listWallets(), FinanceApi.listJars()]);
+    if (remoteWallets.length === 0 && localWallets.length > 0) {
+      await Promise.all(localWallets.map(async (wallet) => {
+        try { await FinanceApi.createWallet(wallet); } catch { /* Keep local data when the item already exists. */ }
+      }));
+    }
+    return {
+      wallets: remoteWallets.length > 0 ? remoteWallets : localWallets,
+      jars: remoteJars.length > 0 ? remoteJars : localJars,
+    };
+  } catch {
+    return { wallets: localWallets, jars: localJars };
+  }
 });
 
 export const addWalletAsync = createAsyncThunk('wallet/addWallet', async (walletData: Omit<Wallet, 'id'>) => {
@@ -36,6 +53,9 @@ export const addWalletAsync = createAsyncThunk('wallet/addWallet', async (wallet
     id: `wallet_${Date.now()}`,
   };
   await insertWallet(newWallet);
+  if (getApiAccessToken()) {
+    try { return await FinanceApi.createWallet(newWallet); } catch { /* Local-first offline fallback. */ }
+  }
   return newWallet;
 });
 
@@ -55,7 +75,12 @@ export const executeTransferAsync = createAsyncThunk(
     note?: string;
   }) => {
     const tx = await transferBetweenWallets(fromWalletId, toWalletId, amount, fee, note);
-    const updatedWallets = await fetchAllWallets();
+    let updatedWallets = await fetchAllWallets();
+    if (getApiAccessToken()) {
+      try {
+        updatedWallets = await FinanceApi.transferWallet(fromWalletId, { toWalletId, amount, fee, note });
+      } catch { /* The local transfer remains available until the server is reachable. */ }
+    }
     return { tx, updatedWallets };
   }
 );
@@ -64,6 +89,12 @@ export const updateJarAllocationAsync = createAsyncThunk(
   'wallet/updateJarAllocation',
   async ({ code, percentage, allocated }: { code: string; percentage: number; allocated: number }) => {
     await updateJarAllocation(code, percentage, allocated);
+    if (getApiAccessToken()) {
+      try {
+        const remote = await FinanceApi.updateJar(code, percentage, allocated);
+        return { code: remote.code, percentage: remote.percentage, allocated: remote.allocatedAmount };
+      } catch { /* Local-first offline fallback. */ }
+    }
     return { code, percentage, allocated };
   }
 );
