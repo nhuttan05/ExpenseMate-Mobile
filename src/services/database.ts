@@ -157,6 +157,17 @@ const initializeDatabase = async (): Promise<void> => {
       );
     `);
 
+    // Migrate databases created by older app versions. CREATE TABLE IF NOT EXISTS
+    // does not add columns to an existing SQLite table, so older installs need
+    // these optional transaction fields before any INSERT/UPDATE uses them.
+    const transactionColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(transactions)');
+    const existingTransactionColumns = new Set(transactionColumns.map((column) => column.name));
+    for (const column of ['walletId', 'targetWalletId', 'jarCode']) {
+      if (!existingTransactionColumns.has(column)) {
+        await db.execAsync(`ALTER TABLE transactions ADD COLUMN ${column} TEXT`);
+      }
+    }
+
     // Seed Transactions
     const txCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM transactions');
     if (txCount?.count === 0) {
