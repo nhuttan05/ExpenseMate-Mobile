@@ -128,15 +128,33 @@ export interface Budget {
   color: string;
 }
 
+export type UserRole = 'USER' | 'ADMIN';
+export type UserAccountStatus = 'ACTIVE' | 'LOCKED';
+
 export interface UserProfile {
   id: string;
   name: string;
   email: string;
+  role: UserRole;
   tier: string;
   avatarUrl: string;
   totalBalance: number;
   monthlyIncome: number;
   monthlyExpense: number;
+  status: UserAccountStatus;
+  joinedDate: string;
+  transactionsCount: number;
+  walletsCount: number;
+}
+
+export interface SystemAuditLog {
+  id: string;
+  timestamp: string;
+  actorEmail: string;
+  action: string;
+  category: 'AUTH' | 'DATA' | 'SECURITY' | 'CONFIG';
+  status: 'SUCCESS' | 'WARNING' | 'FAILED';
+  details: string;
 }
 
 export interface AIChatMessage {

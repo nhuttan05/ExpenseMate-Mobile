@@ -11,18 +11,131 @@ import {
   WhatIfScenario,
   FinancialHealth,
   FinancialChallenge,
+  SystemAuditLog,
 } from '../types';
 
 export const mockUser: UserProfile = {
   id: 'usr_001',
-  name: 'Nhựt Tân',
-  email: 'nhuttan@expensemate.vn',
+  name: 'Nhựt Tân (Doanh Nhân)',
+  email: 'demo@expensemate.com',
+  role: 'USER',
   tier: 'Bậc Thầy Tài Chính',
   avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
   totalBalance: 125800000,
   monthlyIncome: 35000000,
   monthlyExpense: 18200000,
+  status: 'ACTIVE',
+  joinedDate: '15/01/2026',
+  transactionsCount: 142,
+  walletsCount: 4,
 };
+
+export const mockUser2: UserProfile = {
+  id: 'usr_002',
+  name: 'Nguyễn Văn An (Khách Hàng)',
+  email: 'user@expensemate.com',
+  role: 'USER',
+  tier: 'Người Tích Luỹ Mới',
+  avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=250',
+  totalBalance: 42500000,
+  monthlyIncome: 18000000,
+  monthlyExpense: 12500000,
+  status: 'ACTIVE',
+  joinedDate: '02/03/2026',
+  transactionsCount: 28,
+  walletsCount: 2,
+};
+
+export const mockAdminUser: UserProfile = {
+  id: 'usr_admin',
+  name: 'Quản Trị Viên Hệ Thống (Admin)',
+  email: 'admin@expensemate.com',
+  role: 'ADMIN',
+  tier: 'Quản Trị Viên Tối Cao',
+  avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=250',
+  totalBalance: 250000000,
+  monthlyIncome: 65000000,
+  monthlyExpense: 25000000,
+  status: 'ACTIVE',
+  joinedDate: '01/01/2026',
+  transactionsCount: 310,
+  walletsCount: 5,
+};
+
+export const initialSystemUsers: UserProfile[] = [
+  mockUser,
+  mockUser2,
+  mockAdminUser,
+  {
+    id: 'usr_003',
+    name: 'Trần Thị Mai',
+    email: 'mai.tran@gmail.com',
+    role: 'USER',
+    tier: 'Tài Chính Vững Vàng',
+    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=250',
+    totalBalance: 68000000,
+    monthlyIncome: 24000000,
+    monthlyExpense: 14000000,
+    status: 'ACTIVE',
+    joinedDate: '20/02/2026',
+    transactionsCount: 65,
+    walletsCount: 3,
+  },
+  {
+    id: 'usr_004',
+    name: 'Lê Hoàng Long',
+    email: 'long.le@yahoo.com',
+    role: 'USER',
+    tier: 'Khởi Đầu Mới',
+    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=250',
+    totalBalance: 8200000,
+    monthlyIncome: 12000000,
+    monthlyExpense: 11500000,
+    status: 'LOCKED',
+    joinedDate: '10/04/2026',
+    transactionsCount: 14,
+    walletsCount: 1,
+  },
+];
+
+export const initialAuditLogs: SystemAuditLog[] = [
+  {
+    id: 'log_001',
+    timestamp: '09/11/2026 12:40:15',
+    actorEmail: 'admin@expensemate.com',
+    action: 'Đăng nhập trang quản trị Admin Console',
+    category: 'AUTH',
+    status: 'SUCCESS',
+    details: 'Thiết bị Windows PC • IP: 192.168.1.105',
+  },
+  {
+    id: 'log_002',
+    timestamp: '09/11/2026 11:15:22',
+    actorEmail: 'demo@expensemate.com',
+    action: 'Đồng bộ dữ liệu lên Docker Postgres 5433',
+    category: 'DATA',
+    status: 'SUCCESS',
+    details: 'Đã đồng bộ 14 giao dịch SQLite lên máy chủ an toàn',
+  },
+  {
+    id: 'log_003',
+    timestamp: '09/11/2026 09:30:00',
+    actorEmail: 'admin@expensemate.com',
+    action: 'Cập nhật tham số quy tắc 6 Chiếc Lọ (JARS)',
+    category: 'CONFIG',
+    status: 'SUCCESS',
+    details: 'Đặt ngưỡng cảnh báo tự động vượt chi ở mức 80%',
+  },
+  {
+    id: 'log_004',
+    timestamp: '08/11/2026 18:45:10',
+    actorEmail: 'long.le@yahoo.com',
+    action: 'Khóa tài khoản do vi phạm bảo mật',
+    category: 'SECURITY',
+    status: 'WARNING',
+    details: 'Đã tạm khóa tài khoản sau 5 lần nhập sai mã PIN',
+  },
+];
 
 export const initialWallets: Wallet[] = [
   {
@@ -535,3 +648,298 @@ export const initialChatMessages: AIChatMessage[] = [
 ];
 
 export const initialAIChat = initialChatMessages;
+
+// ==========================================
+// DỮ LIỆU CÔ LẬP THEO TÀI KHOẢN (MULTI-TENANT DATA ISOLATION)
+// ==========================================
+
+export const user2Wallets: Wallet[] = [
+  {
+    id: 'wallet_tcb_user2',
+    name: 'Techcombank Cá Nhân',
+    type: 'BANK',
+    balance: 38000000,
+    currency: 'VND',
+    icon: 'account-balance',
+    color: '#DC2626',
+    backgroundColor: '#FEE2E2',
+    accountNumber: '1903 •••• 5678',
+  },
+  {
+    id: 'wallet_cash_user2',
+    name: 'Tiền Mặt Bỏ Ví',
+    type: 'CASH',
+    balance: 4500000,
+    currency: 'VND',
+    icon: 'payments',
+    color: '#D97706',
+    backgroundColor: '#FEF3C7',
+  },
+];
+
+export const user2Transactions: Transaction[] = [
+  {
+    id: 'tx_u2_01',
+    title: 'Nhận lương tháng 11',
+    amount: 18000000,
+    type: 'INCOME',
+    category: {
+      id: 'cat_salary',
+      name: 'Lương & Thưởng',
+      icon: 'attach-money',
+      color: '#059669',
+      backgroundColor: '#D1FAE5',
+      type: 'INCOME',
+    },
+    date: '2026-11-05',
+    formattedTime: '05/11 • 09:30',
+    paymentMethod: 'Techcombank Cá Nhân',
+    walletId: 'wallet_tcb_user2',
+    jarCode: 'NEC',
+    note: 'Lương chuyên viên văn phòng',
+  },
+  {
+    id: 'tx_u2_02',
+    title: 'Tiền thuê căn hộ mini',
+    amount: 4500000,
+    type: 'EXPENSE',
+    category: {
+      id: 'cat_rent',
+      name: 'Thuê nhà & Căn hộ',
+      icon: 'apartment',
+      color: '#0284C7',
+      backgroundColor: '#E0F2FE',
+      type: 'EXPENSE',
+      jarCode: 'NEC',
+    },
+    date: '2026-11-06',
+    formattedTime: '06/11 • 14:00',
+    paymentMethod: 'Techcombank Cá Nhân',
+    walletId: 'wallet_tcb_user2',
+    jarCode: 'NEC',
+    note: 'Đóng tiền phòng đầu tháng',
+  },
+  {
+    id: 'tx_u2_03',
+    title: 'Ăn trưa cơm văn phòng',
+    amount: 45000,
+    type: 'EXPENSE',
+    category: {
+      id: 'cat_food',
+      name: 'Ăn uống & Siêu thị',
+      icon: 'restaurant',
+      color: '#D97706',
+      backgroundColor: '#FEF3C7',
+      type: 'EXPENSE',
+      jarCode: 'NEC',
+    },
+    date: '2026-11-08',
+    formattedTime: '08/11 • 12:15',
+    paymentMethod: 'Tiền Mặt Bỏ Ví',
+    walletId: 'wallet_cash_user2',
+    jarCode: 'NEC',
+  },
+  {
+    id: 'tx_u2_04',
+    title: 'Mua sách Kỹ năng tài chính Tiki',
+    amount: 250000,
+    type: 'EXPENSE',
+    category: {
+      id: 'cat_edu',
+      name: 'Học tập & Sách vở',
+      icon: 'menu-book',
+      color: '#7C3AED',
+      backgroundColor: '#EDE9FE',
+      type: 'EXPENSE',
+      jarCode: 'EDU',
+    },
+    date: '2026-11-08',
+    formattedTime: '08/11 • 19:40',
+    paymentMethod: 'Techcombank Cá Nhân',
+    walletId: 'wallet_tcb_user2',
+    jarCode: 'EDU',
+  },
+];
+
+export const adminWallets: Wallet[] = [
+  {
+    id: 'wallet_admin_bank',
+    name: 'MBBank Doanh Nghiệp',
+    type: 'BANK',
+    balance: 180000000,
+    currency: 'VND',
+    icon: 'account-balance',
+    color: '#1D4ED8',
+    backgroundColor: '#DBEAFE',
+    accountNumber: 'MB •••• 9999',
+  },
+  {
+    id: 'wallet_admin_invest',
+    name: 'Quỹ Dự Trữ Hệ Thống',
+    type: 'SAVINGS',
+    balance: 70000000,
+    currency: 'VND',
+    icon: 'savings',
+    color: '#059669',
+    backgroundColor: '#D1FAE5',
+    accountNumber: 'Quỹ vận hành an toàn',
+  },
+];
+
+export const adminTransactions: Transaction[] = [
+  {
+    id: 'tx_adm_01',
+    title: 'Thu nhập điều hành nền tảng',
+    amount: 65000000,
+    type: 'INCOME',
+    category: {
+      id: 'cat_business',
+      name: 'Thu nhập vận hành',
+      icon: 'trending-up',
+      color: '#059669',
+      backgroundColor: '#D1FAE5',
+      type: 'INCOME',
+    },
+    date: '2026-11-01',
+    formattedTime: '01/11 • 08:00',
+    paymentMethod: 'MBBank Doanh Nghiệp',
+    walletId: 'wallet_admin_bank',
+    jarCode: 'FFA',
+  },
+  {
+    id: 'tx_adm_02',
+    title: 'Chi phí Server Cloud & Docker',
+    amount: 8500000,
+    type: 'EXPENSE',
+    category: {
+      id: 'cat_infra',
+      name: 'Hạ tầng máy chủ',
+      icon: 'dns',
+      color: '#475569',
+      backgroundColor: '#F1F5F9',
+      type: 'EXPENSE',
+      jarCode: 'NEC',
+    },
+    date: '2026-11-04',
+    formattedTime: '04/11 • 15:30',
+    paymentMethod: 'MBBank Doanh Nghiệp',
+    walletId: 'wallet_admin_bank',
+    jarCode: 'NEC',
+  },
+];
+
+export interface AccountDataStore {
+  user: UserProfile;
+  wallets: Wallet[];
+  transactions: Transaction[];
+  budgets: Budget[];
+  jars: JarEnvelope[];
+}
+
+export const accountStores: Record<string, AccountDataStore> = {
+  usr_001: {
+    user: mockUser,
+    wallets: initialWallets,
+    transactions: initialTransactions,
+    budgets: initialBudgets,
+    jars: initialJars,
+  },
+  usr_002: {
+    user: mockUser2,
+    wallets: user2Wallets,
+    transactions: user2Transactions,
+    budgets: [
+      {
+        id: 'bg_u2_01',
+        categoryId: 'cat_food',
+        categoryName: 'Ăn uống',
+        allocatedAmount: 4000000,
+        spentAmount: 2100000,
+        month: '11/2026',
+        color: '#D97706',
+      },
+    ],
+    jars: [
+      {
+        id: 'jar_u2_nec',
+        code: 'NEC',
+        name: 'Nhu cầu thiết yếu',
+        vietnameseName: 'Nhu cầu thiết yếu (55%)',
+        percentage: 55,
+        allocatedAmount: 9900000,
+        spentAmount: 4545000,
+        color: '#0284C7',
+        icon: 'home',
+        description: 'Tiền thuê trọ, ăn uống văn phòng',
+      },
+      {
+        id: 'jar_u2_ffa',
+        code: 'FFA',
+        name: 'Tự do tài chính & Đầu tư',
+        vietnameseName: 'Tự do tài chính & Đầu tư (10%)',
+        percentage: 10,
+        allocatedAmount: 1800000,
+        spentAmount: 1800000,
+        color: '#059669',
+        icon: 'trending-up',
+        description: 'Tích lũy định kỳ',
+      },
+      {
+        id: 'jar_u2_ltss',
+        code: 'LTSS',
+        name: 'Tiết kiệm dài hạn',
+        vietnameseName: 'Tiết kiệm mua sắm dài hạn (10%)',
+        percentage: 10,
+        allocatedAmount: 1800000,
+        spentAmount: 500000,
+        color: '#7C3AED',
+        icon: 'flag',
+        description: 'Mua điện thoại mới',
+      },
+      {
+        id: 'jar_u2_edu',
+        code: 'EDU',
+        name: 'Học vấn & Bản thân',
+        vietnameseName: 'Học vấn & Phát triển bản thân (10%)',
+        percentage: 10,
+        allocatedAmount: 1800000,
+        spentAmount: 250000,
+        color: '#D97706',
+        icon: 'menu-book',
+        description: 'Sách phát triển kỹ năng',
+      },
+      {
+        id: 'jar_u2_play',
+        code: 'PLAY',
+        name: 'Hưởng thụ & Giải trí',
+        vietnameseName: 'Hưởng thụ & Giải trí (10%)',
+        percentage: 10,
+        allocatedAmount: 1800000,
+        spentAmount: 450000,
+        color: '#EC4899',
+        icon: 'sports-esports',
+        description: 'Xem phim, gặp bạn bè',
+      },
+      {
+        id: 'jar_u2_give',
+        code: 'GIVE',
+        name: 'Cho đi & Hiếu hỉ',
+        vietnameseName: 'Cho đi & Hiếu hỉ (5%)',
+        percentage: 5,
+        allocatedAmount: 900000,
+        spentAmount: 200000,
+        color: '#10B981',
+        icon: 'volunteer-activism',
+        description: 'Biếu quà gia đình',
+      },
+    ],
+  },
+  usr_admin: {
+    user: mockAdminUser,
+    wallets: adminWallets,
+    transactions: adminTransactions,
+    budgets: initialBudgets,
+    jars: initialJars,
+  },
+};
+

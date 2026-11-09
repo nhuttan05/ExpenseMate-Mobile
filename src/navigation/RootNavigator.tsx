@@ -17,6 +17,7 @@ import { StatisticsScreen } from '../pages/StatisticsScreen';
 import { WalletsScreen } from '../pages/WalletsScreen';
 import { RecurringScreen } from '../pages/RecurringScreen';
 import { WhatIfSimulatorScreen } from '../pages/WhatIfSimulatorScreen';
+import { AdminScreen } from '../pages/AdminScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -27,6 +28,11 @@ export const RootNavigator = () => {
       <Stack.Screen name="Register" component={RegisterScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <Stack.Screen name="Main" component={TabNavigator} />
+      <Stack.Screen
+        name="Admin"
+        component={AdminScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
       <Stack.Screen
         name="AddTransaction"
         component={AddTransactionScreen}

@@ -6,9 +6,11 @@ import aiReducer from './slices/aiSlice';
 import walletReducer from './slices/walletSlice';
 import recurringReducer from './slices/recurringSlice';
 import simulationReducer from './slices/simulationSlice';
+import authReducer from './slices/authSlice';
 
 export const store = configureStore({
   reducer: {
+    auth: authReducer,
     expense: expenseReducer,
     budget: budgetReducer,
     ai: aiReducer,

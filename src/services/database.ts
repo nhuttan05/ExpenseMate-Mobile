@@ -19,7 +19,10 @@ import {
   initialDebts,
   initialScenarios,
   initialChallenges,
+  accountStores,
 } from '../data/mockData';
+
+let currentActiveUserId = 'usr_001';
 
 let db: SQLite.SQLiteDatabase | null = null;
 let initializationPromise: Promise<void> | null = null;
@@ -975,6 +978,88 @@ export const resetDatabaseToDefaults = async (): Promise<boolean> => {
     return true;
   } catch (err) {
     console.error('Failed to reset database to defaults:', err);
+    return false;
+  }
+};
+
+// ==================== MULTI-ACCOUNT ISOLATION ====================
+export const getActiveUserId = (): string => currentActiveUserId;
+
+export const switchActiveAccountDatabase = async (userId: string): Promise<boolean> => {
+  await initDatabase();
+  currentActiveUserId = userId;
+  const store = accountStores[userId] || accountStores['usr_001'];
+
+  memoryTransactions = store.transactions.map((t) => ({ ...t }));
+  memoryWallets = store.wallets.map((w) => ({ ...w }));
+  memoryBudgets = store.budgets.map((b) => ({ ...b }));
+  memoryJars = store.jars.map((j) => ({ ...j }));
+
+  if (!db || Platform.OS === 'web') return true;
+
+  try {
+    await db.execAsync(`
+      DELETE FROM transactions;
+      DELETE FROM budgets;
+      DELETE FROM wallets;
+      DELETE FROM jars;
+    `);
+
+    // Insert user's isolated transactions
+    for (const tx of store.transactions) {
+      await db.runAsync(
+        `INSERT INTO transactions (id, title, amount, type, categoryId, categoryName, categoryIcon, categoryColor, categoryBg, date, formattedTime, paymentMethod, walletId, jarCode, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          tx.id,
+          tx.title,
+          tx.amount,
+          tx.type,
+          tx.category.id,
+          tx.category.name,
+          tx.category.icon,
+          tx.category.color,
+          tx.category.backgroundColor,
+          tx.date,
+          tx.formattedTime || null,
+          tx.paymentMethod,
+          tx.walletId || null,
+          tx.jarCode || null,
+          tx.note || null,
+        ]
+      );
+    }
+
+    // Insert user's isolated wallets
+    for (const w of store.wallets) {
+      await db.runAsync(
+        `INSERT INTO wallets (id, name, type, balance, currency, icon, color, backgroundColor, accountNumber, creditLimit, isExcludedFromTotal)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [w.id, w.name, w.type, w.balance, w.currency, w.icon, w.color, w.backgroundColor, w.accountNumber || null, w.creditLimit || null, w.isExcludedFromTotal ? 1 : 0]
+      );
+    }
+
+    // Insert user's isolated budgets
+    for (const b of store.budgets) {
+      await db.runAsync(
+        `INSERT INTO budgets (id, categoryId, categoryName, allocatedAmount, spentAmount, month, color)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [b.id, b.categoryId, b.categoryName, b.allocatedAmount, b.spentAmount, b.month, b.color]
+      );
+    }
+
+    // Insert user's isolated jars
+    for (const j of store.jars) {
+      await db.runAsync(
+        `INSERT INTO jars (id, code, name, vietnameseName, percentage, allocatedAmount, spentAmount, color, icon, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [j.id, j.code, j.name, j.vietnameseName, j.percentage, j.allocatedAmount, j.spentAmount, j.color, j.icon, j.description]
+      );
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Failed to isolate account data in SQLite:', err);
     return false;
   }
 };

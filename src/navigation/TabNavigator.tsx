@@ -6,7 +6,9 @@ import { HomeScreen } from '../pages/HomeScreen';
 import { WalletsScreen } from '../pages/WalletsScreen';
 import { WhatIfSimulatorScreen } from '../pages/WhatIfSimulatorScreen';
 import { ProfileScreen } from '../pages/ProfileScreen';
+import { AdminScreen } from '../pages/AdminScreen';
 import { Colors, Shadows } from '../constants/theme';
+import { useAppSelector } from '../redux/store';
 
 const Tab = createBottomTabNavigator();
 
@@ -14,6 +16,8 @@ const Tab = createBottomTabNavigator();
 const NullScreen = () => null;
 
 export const TabNavigator = ({ navigation }: any) => {
+  const { currentUser } = useAppSelector((state) => state.auth);
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -77,6 +81,20 @@ export const TabNavigator = ({ navigation }: any) => {
           ),
         }}
       />
+
+      {/* Tab Quản Trị Hệ Thống: CHỈ HIỂN THỊ KHI ROLE LÀ ADMIN */}
+      {currentUser?.role === 'ADMIN' && (
+        <Tab.Screen
+          name="AdminTab"
+          component={AdminScreen}
+          options={{
+            tabBarLabel: 'Quản trị',
+            tabBarIcon: ({ color }) => (
+              <MaterialIcons name="admin-panel-settings" size={24} color={color} />
+            ),
+          }}
+        />
+      )}
 
       <Tab.Screen
         name="ProfileTab"

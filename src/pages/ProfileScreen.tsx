@@ -48,15 +48,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const dispatch = useAppDispatch();
   const { transactions } = useAppSelector((state) => state.expense);
   const { wallets } = useAppSelector((state) => state.wallet);
+  const { currentUser } = useAppSelector((state) => state.auth);
 
-  // User State
+  // User State synced with active account
   const [user, setUser] = useState({
-    name: initialUser.name,
-    email: initialUser.email,
+    name: currentUser?.name || initialUser.name,
+    email: currentUser?.email || initialUser.email,
     phone: '+84 987 654 321',
-    avatarUrl: initialUser.avatarUrl,
-    tier: initialUser.tier,
+    avatarUrl: currentUser?.avatarUrl || initialUser.avatarUrl,
+    tier: currentUser?.tier || initialUser.tier,
+    role: currentUser?.role || 'USER',
   });
+
+  useEffect(() => {
+    if (currentUser) {
+      setUser({
+        name: currentUser.name,
+        email: currentUser.email,
+        phone: '+84 987 654 321',
+        avatarUrl: currentUser.avatarUrl,
+        tier: currentUser.tier,
+        role: currentUser.role,
+      });
+    }
+  }, [currentUser]);
 
   // Security & App Settings
   const [biometricsEnabled, setBiometricsEnabled] = useState(true);
@@ -393,6 +408,31 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             <Text style={styles.statNumber}>{selectedCurrency}</Text>
           </View>
         </View>
+
+        {/* ======================================================== */}
+        {/* ĐẶC QUYỀN QUẢN TRỊ VIÊN (CHỈ HIỂN THỊ KHI ROLE LÀ ADMIN) */}
+        {/* ======================================================== */}
+        {currentUser?.role === 'ADMIN' && (
+          <View style={styles.groupWrapper}>
+            <Text style={[styles.groupTitle, { color: '#7C3AED' }]}>ĐẶC QUYỀN QUẢN TRỊ VIÊN</Text>
+            <View style={[styles.menuCard, Shadows.card, { borderColor: '#DDD6FE', borderWidth: 1.5 }]}>
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#FAF5FF' }]}
+                onPress={() => navigation.navigate('Admin')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.iconBox, { backgroundColor: '#7C3AED' }]}>
+                  <MaterialIcons name="admin-panel-settings" size={20} color="#FFF" />
+                </View>
+                <View style={styles.menuContent}>
+                  <Text style={[styles.menuText, { color: '#6D28D9' }]}>Bảng Điều Khiển Quản Trị Hệ Thống</Text>
+                  <Text style={styles.menuSubText}>Quản lý tài khoản, cấu hình 6 Hũ toàn sàn & Audit Logs</Text>
+                </View>
+                <MaterialIcons name="arrow-forward" size={20} color="#7C3AED" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* SETTINGS GROUP 1: HỆ THỐNG & KẾT NỐI */}
         <View style={styles.groupWrapper}>

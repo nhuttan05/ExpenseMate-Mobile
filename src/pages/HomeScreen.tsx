@@ -34,6 +34,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const { wallets, jars } = useAppSelector((state) => state.wallet);
   const { health } = useAppSelector((state) => state.simulation);
   const { recurringList, debtsList } = useAppSelector((state) => state.recurring);
+  const { currentUser } = useAppSelector((state) => state.auth);
+
+  const user = currentUser || mockUser;
 
   useEffect(() => {
     dispatch(loadTransactions());
@@ -49,8 +52,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     return sum + w.balance;
   }, 0);
 
-  const monthlyIncome = mockUser.monthlyIncome;
-  const monthlyExpense = mockUser.monthlyExpense;
+  const monthlyIncome = user.monthlyIncome || 35000000;
+  const monthlyExpense = user.monthlyExpense || 18200000;
   const savingsRate = Math.round(((monthlyIncome - monthlyExpense) / monthlyIncome) * 100);
 
   const pendingDebtsCount = debtsList.filter((d) => d.status === 'PENDING').length;
@@ -61,17 +64,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       {/* 1. TOP HEADER */}
       <View style={styles.header}>
         <View style={styles.userInfo}>
-          <Image source={{ uri: mockUser.avatarUrl }} style={styles.avatar} />
+          <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
           <View style={styles.userTextContainer}>
             <View style={styles.tierBadge}>
               <MaterialIcons name="verified" size={12} color={Colors.primary} />
-              <Text style={styles.tierBadgeText}>{mockUser.tier}</Text>
+              <Text style={styles.tierBadgeText}>{user.tier}</Text>
             </View>
-            <Text style={styles.userNameText}>Chào bạn, {mockUser.name}</Text>
+            <Text style={styles.userNameText}>Chào bạn, {user.name}</Text>
           </View>
         </View>
 
         <View style={styles.headerActions}>
+          {user.role === 'ADMIN' && (
+            <TouchableOpacity
+              style={[styles.iconButton, { backgroundColor: '#F3E8FF' }]}
+              onPress={() => navigation.navigate('Admin')}
+              activeOpacity={0.75}
+            >
+              <MaterialIcons name="admin-panel-settings" size={22} color="#7C3AED" />
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={styles.iconButton}
             onPress={() => navigation.navigate('AIAssistant')}
