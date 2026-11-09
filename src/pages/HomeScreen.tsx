@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Shadows } from '../constants/theme';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, getJarName, getJarShortName } from '../utils/formatters';
 import { useAppDispatch, useAppSelector } from '../redux/store';
 import { toggleBalanceVisibility, loadTransactions } from '../redux/slices/expenseSlice';
 import { loadBudgets } from '../redux/slices/budgetSlice';
@@ -265,43 +265,48 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </AnimatedCard>
       </View>
 
-      {/* 5. 6 CHIẾC LỌ TÀI CHÍNH (JARS ENVELOPES) */}
+      {/* 5. 6 CHIẾC LỌ TÀI CHÍNH (QUY TẮC PHÂN BỔ T. HARV EKER) */}
       <AnimatedCard delay={200} style={styles.jarsCard}>
         <View style={styles.sectionHeaderRowInside}>
           <View style={styles.sectionTitleWithIcon}>
-            <MaterialIcons name="pie-chart" size={18} color={Colors.primary} />
-            <Text style={styles.cardHeaderTitle}>6 Hũ Chi Tiêu (JARS)</Text>
+            <MaterialIcons name="savings" size={20} color={Colors.primary} />
+            <Text style={styles.cardHeaderTitle}>6 Hũ Quản Lý Chi Tiêu (Quy Tắc 6 Chiếc Lọ)</Text>
           </View>
           <TouchableOpacity onPress={() => navigation.navigate('Budget')} activeOpacity={0.7}>
-            <Text style={styles.sectionSeeAll}>Chi tiết</Text>
+            <Text style={styles.sectionSeeAll}>Xem chi tiết</Text>
           </TouchableOpacity>
         </View>
 
         <Text style={styles.jarsDescription}>
-          Quy tắc phân bổ thu nhập thông minh theo chuẩn T. Harv Eker
+          Phương pháp phân bổ thu nhập thông minh theo chuẩn T. Harv Eker giúp kiểm soát dòng tiền bền vững.
         </Text>
 
         <View style={styles.jarsGrid}>
           {jars.map((jar) => {
             const spentPercent = Math.min(100, Math.round((jar.spentAmount / jar.allocatedAmount) * 100));
             const isWarning = spentPercent >= 80;
+            const jarVietnameseTitle = getJarName(jar.code);
+            const remainingAmount = Math.max(0, jar.allocatedAmount - jar.spentAmount);
 
             return (
               <View key={jar.id} style={styles.jarItem}>
                 <View style={styles.jarItemHeader}>
                   <View style={styles.jarBadgeWithIcon}>
                     <View style={[styles.jarMiniDot, { backgroundColor: jar.color }]} />
-                    <Text style={styles.jarCodeText}>{jar.code}</Text>
-                    <Text style={styles.jarPercentText}>({jar.percentage}%)</Text>
+                    <Text style={styles.jarNameText}>{jarVietnameseTitle}</Text>
+                    <View style={styles.jarPercentBadge}>
+                      <Text style={styles.jarPercentText}>{jar.percentage}%</Text>
+                    </View>
                   </View>
-                  <Text
-                    style={[
-                      styles.jarSpentPercent,
-                      isWarning ? { color: Colors.expense, fontWeight: '800' } : { color: Colors.textSecondary },
-                    ]}
-                  >
-                    {spentPercent}%
-                  </Text>
+
+                  {isWarning ? (
+                    <View style={styles.warningPill}>
+                      <MaterialIcons name="warning" size={12} color={Colors.expense} />
+                      <Text style={styles.warningPillText}>Đã tiêu {spentPercent}% (Vượt 80%)</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.jarSpentPercent}>Đã dùng {spentPercent}%</Text>
+                  )}
                 </View>
 
                 {/* Progress bar */}
@@ -317,8 +322,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   />
                 </View>
 
-                <Text style={styles.jarSubtext} numberOfLines={1}>
-                  {jar.vietnameseName}
+                <View style={styles.jarMoneyRow}>
+                  <Text style={styles.jarMoneyLeft}>
+                    Đã chi: <Text style={styles.boldText}>{formatCurrency(jar.spentAmount)}</Text> / {formatCurrency(jar.allocatedAmount)}
+                  </Text>
+                  <Text style={[styles.jarMoneyRight, isWarning ? { color: Colors.expense } : { color: Colors.income }]}>
+                    Còn lại: {formatCurrency(remainingAmount)}
+                  </Text>
+                </View>
+
+                <Text style={styles.jarSubtext}>
+                  {jar.description}
                 </Text>
               </View>
             );
@@ -375,7 +389,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     <Text style={styles.txWalletTag}>• {tx.paymentMethod}</Text>
                   ) : null}
                   {tx.jarCode ? (
-                    <Text style={styles.txJarTag}>• Hũ {tx.jarCode}</Text>
+                    <Text style={styles.txJarTag}>• Hũ {getJarShortName(tx.jarCode)}</Text>
                   ) : null}
                 </View>
               </View>
@@ -792,38 +806,82 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flex: 1,
   },
   jarMiniDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  jarCodeText: {
-    fontSize: 13,
+  jarNameText: {
+    fontSize: 14,
     fontWeight: '800',
     color: Colors.textPrimary,
   },
+  jarPercentBadge: {
+    backgroundColor: Colors.surfaceSubtle,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: BorderRadius.xs,
+  },
   jarPercentText: {
     fontSize: 11,
-    color: Colors.textMuted,
-    fontWeight: '600',
+    color: Colors.textSecondary,
+    fontWeight: '700',
   },
   jarSpentPercent: {
     fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  warningPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.expenseLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  warningPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.expense,
   },
   jarProgressBarTrack: {
-    height: 6,
+    height: 8,
     backgroundColor: Colors.surfaceSubtle,
-    borderRadius: 3,
+    borderRadius: 4,
     overflow: 'hidden',
+    marginVertical: 4,
   },
   jarProgressBarFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 4,
+  },
+  jarMoneyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  jarMoneyLeft: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  jarMoneyRight: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  boldText: {
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
   jarSubtext: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: Colors.textMuted,
+    lineHeight: 16,
+    marginTop: 2,
   },
 
   // TRANSACTIONS

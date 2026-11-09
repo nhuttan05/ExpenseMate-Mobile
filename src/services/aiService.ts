@@ -221,7 +221,7 @@ export const AIService = {
         feasibilityScore = 68;
         safeToBuy = true;
         impactAssessment = `Mỗi tháng bạn sẽ phải trích ${impactRate.toFixed(1)}% tổng thu nhập liên tục trong ${durationMonths} tháng.`;
-        recommendation = `Cần cân nhắc kỹ. Bạn nên cắt giảm 30% ngân sách Hưởng thụ (PLAY) để bù đắp khoản trả góp này.`;
+        recommendation = `Cần cân nhắc kỹ. Bạn nên cắt giảm 30% ngân sách Hũ Hưởng thụ & Giải trí để bù đắp khoản trả góp này.`;
       } else {
         feasibilityScore = 88;
         safeToBuy = true;
@@ -292,7 +292,7 @@ export const AIService = {
         debtRatio > 15
           ? `Dư nợ tín dụng đang chiếm ${debtRatio.toFixed(1)}% thu nhập, hãy ưu tiên tất toán đúng hạn để tránh lãi suất cao.`
           : `Tỷ lệ nợ chỉ ${debtRatio.toFixed(1)}% thu nhập, đòn bẩy tài chính đang được bạn kiểm soát rất tốt.`,
-        `Tỷ lệ tiết kiệm tháng này đạt ${savingsRate.toFixed(1)}%, hãy tiếp tục phân bổ đều đặn vào Hũ Tự do tài chính (FFA).`,
+        `Tỷ lệ tiết kiệm tháng này đạt ${savingsRate.toFixed(1)}%, hãy tiếp tục phân bổ đều đặn vào Hũ Tự do tài chính & Đầu tư.`,
       ],
     };
   },

@@ -10,6 +10,8 @@ import { Colors, Spacing, BorderRadius, Shadows } from '../constants/theme';
 import { formatCurrency } from '../utils/formatters';
 import { useAppDispatch, useAppSelector } from '../redux/store';
 import { loadBudgets } from '../redux/slices/budgetSlice';
+import { loadWalletsAndJars } from '../redux/slices/walletSlice';
+import { getJarName, getJarShortName } from '../utils/formatters';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
 import { AnimatedCard } from '../components/ui/AnimatedCard';
 import { AnimatedProgressBar } from '../components/ui/AnimatedProgressBar';
@@ -22,9 +24,11 @@ export const BudgetScreen: React.FC<BudgetScreenProps> = ({ navigation }) => {
   const dispatch = useAppDispatch();
   const { budgets, totalAllocated } = useAppSelector((state) => state.budget);
   const { monthlyExpense } = useAppSelector((state) => state.expense);
+  const { jars } = useAppSelector((state) => state.wallet);
 
   useEffect(() => {
     dispatch(loadBudgets());
+    dispatch(loadWalletsAndJars());
   }, [dispatch]);
 
   const percentage = Math.min(Math.round((monthlyExpense / totalAllocated) * 100), 100);
@@ -150,6 +154,65 @@ export const BudgetScreen: React.FC<BudgetScreenProps> = ({ navigation }) => {
                     Hạn mức: {formatCurrency(b.allocatedAmount)}
                   </Text>
                 </View>
+              </AnimatedCard>
+            );
+          })}
+        </View>
+
+        
+        {/* Section 6 Chiếc Lọ T. Harv Eker */}
+        <View style={[styles.sectionHeader, { marginTop: Spacing.xl }]}>
+          <Text style={styles.sectionTitle}>6 Hũ Quản Lý Chi Tiêu (T. Harv Eker)</Text>
+          <Text style={styles.jarsBadgeTag}>Chuẩn 100% Tiếng Việt</Text>
+        </View>
+
+        <Text style={styles.jarsGuideText}>
+          Phương pháp quản lý tài chính kinh điển chia thu nhập thành 6 hũ riêng biệt, tự động kiểm soát dòng tiền và kỷ luật chi tiêu.
+        </Text>
+
+        <View style={styles.budgetList}>
+          {jars.map((jar, index) => {
+            const jarPercent = Math.min(Math.round((jar.spentAmount / jar.allocatedAmount) * 100), 100);
+            const isNearLimit = jarPercent >= 80;
+            const jarVietnameseTitle = getJarName(jar.code);
+            const remaining = Math.max(0, jar.allocatedAmount - jar.spentAmount);
+
+            return (
+              <AnimatedCard key={jar.id} delay={150 + index * 40} style={[styles.budgetItemCard, Shadows.card]}>
+                <View style={styles.itemHeader}>
+                  <View style={styles.itemTitleGroup}>
+                    <View style={[styles.categoryColorDot, { backgroundColor: jar.color }]} />
+                    <Text style={styles.categoryTitle}>{jarVietnameseTitle}</Text>
+                    <View style={styles.jarPercentPill}>
+                      <Text style={styles.jarPercentPillText}>{jar.percentage}%</Text>
+                    </View>
+                  </View>
+                  {isNearLimit ? (
+                    <View style={styles.warningPillBox}>
+                      <MaterialIcons name="warning" size={13} color={Colors.error} />
+                      <Text style={styles.warningPillText}>Đã tiêu {jarPercent}% (Cảnh báo vượt 80%)</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.itemPercent}>Đã dùng {jarPercent}%</Text>
+                  )}
+                </View>
+
+                <AnimatedProgressBar
+                  progress={jarPercent}
+                  height={8}
+                  color={isNearLimit ? Colors.error : jar.color}
+                  style={{ marginVertical: Spacing.xs }}
+                />
+
+                <View style={styles.itemFooter}>
+                  <Text style={styles.itemSpent}>
+                    Đã chi: {formatCurrency(jar.spentAmount)} / Hạn mức: {formatCurrency(jar.allocatedAmount)}
+                  </Text>
+                  <Text style={[styles.itemAllocated, isNearLimit ? { color: Colors.error } : { color: Colors.secondary }]}>
+                    Còn lại: {formatCurrency(remaining)}
+                  </Text>
+                </View>
+                <Text style={styles.jarDescSmall}>{jar.description}</Text>
               </AnimatedCard>
             );
           })}
@@ -360,6 +423,52 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     marginTop: Spacing.lg,
     gap: Spacing.xs,
+  },
+
+  jarsBadgeTag: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  jarsGuideText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
+    lineHeight: 18,
+  },
+  jarPercentPill: {
+    backgroundColor: Colors.surfaceContainerLow,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: BorderRadius.xs,
+  },
+  jarPercentPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  warningPillBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.errorLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  warningPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.error,
+  },
+  jarDescSmall: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 4,
   },
   addBudgetBtnText: {
     fontSize: 14,

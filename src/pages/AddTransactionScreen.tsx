@@ -16,6 +16,7 @@ import { Category, TransactionType, JarCode } from '../types';
 import { AIService } from '../services/aiService';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
 import { showAppNotice } from '../utils/appNotice';
+import { getJarName, getJarShortName } from '../utils/formatters';
 
 interface AddTransactionScreenProps {
   navigation: any;
@@ -57,7 +58,7 @@ export const AddTransactionScreen: React.FC<AddTransactionScreenProps> = ({ navi
     setSelectedJarCode(parsed.jarCode);
     setAiSuggested(true);
     setAiNaturalInput('');
-    showAppNotice('✨ AI Đã Tự Động Phân Loại', `Tiêu đề: ${parsed.title}\nSố tiền: ${parsed.amount.toLocaleString('vi-VN')} đ\nDanh mục: ${parsed.category.name}\nVí trừ tiền: ${wallets.find(w => w.id === parsed.walletId)?.name || 'Mặc định'}\nHũ JARS: ${parsed.jarCode}`);
+    showAppNotice('✨ AI Đã Tự Động Phân Loại', `Tiêu đề: ${parsed.title}\nSố tiền: ${parsed.amount.toLocaleString('vi-VN')} đ\nDanh mục: ${parsed.category.name}\nVí trừ tiền: ${wallets.find(w => w.id === parsed.walletId)?.name || 'Mặc định'}\nHũ chi tiêu: ${getJarName(parsed.jarCode)}`);
   };
 
   const handleTitleChange = (text: string) => {
@@ -279,7 +280,7 @@ export const AddTransactionScreen: React.FC<AddTransactionScreenProps> = ({ navi
         {/* CHỌN HŨ JARS (NẾU LÀ KHOẢN CHI) */}
         {type === 'EXPENSE' && (
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>GẮN VÀO HŨ CHI TIÊU (JARS)</Text>
+            <Text style={styles.inputLabel}>GẮN VÀO HŨ CHI TIÊU (QUY TẮC 6 CHIẾC LỌ)</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.walletsRow}>
               {jars.map((j) => {
                 const isSelected = selectedJarCode === j.code;
@@ -292,7 +293,7 @@ export const AddTransactionScreen: React.FC<AddTransactionScreenProps> = ({ navi
                   >
                     <View style={[styles.jarDot, { backgroundColor: j.color }]} />
                     <Text style={[styles.jarPillText, isSelected && styles.jarPillTextActive]}>
-                      {j.code} ({j.vietnameseName.split(' ')[0]})
+                      {getJarName(j.code)} ({j.percentage}%)
                     </Text>
                   </TouchableOpacity>
                 );
