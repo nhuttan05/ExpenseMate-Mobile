@@ -78,8 +78,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   });
 
   useEffect(() => {
-    if (currentUser) {
-      setUser({
+    if (!currentUser) return;
+
+    const nextUser = {
         name: currentUser.name,
         email: currentUser.email,
         phone: '+84 987 654 321',
@@ -88,8 +89,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         role: currentUser.role,
         monthlyIncome: currentUser.monthlyIncome,
         monthlyExpense: currentUser.monthlyExpense,
-      });
-    }
+    };
+    const timeoutId = setTimeout(() => setUser(nextUser), 0);
+    return () => clearTimeout(timeoutId);
   }, [currentUser]);
 
   // Security & App Settings
@@ -1020,7 +1022,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
             <Text style={[styles.dangerTitle, { color: theme.textPrimary }]}>Xác Nhận Đăng Xuất</Text>
             <Text style={[styles.dangerMessage, { color: theme.textSecondary }]}>
-              Bạn có chắc chắn muốn đăng xuất khỏi tài khoản "{user.name}"? Dữ liệu tài chính riêng biệt của tài khoản này vẫn được bảo toàn an toàn trên thiết bị.
+              Bạn có chắc chắn muốn đăng xuất khỏi tài khoản “{user.name}”? Dữ liệu tài chính riêng biệt của tài khoản này vẫn được bảo toàn an toàn trên thiết bị.
             </Text>
 
             <View style={styles.dangerActionsRow}>
