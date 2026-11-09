@@ -748,3 +748,233 @@ export const fetchAllBudgets = async (): Promise<Budget[]> => {
     return [...memoryBudgets];
   }
 };
+
+// ==================== BACKUP & RESTORE & RESET ====================
+export interface DatabaseSnapshot {
+  version: string;
+  exportedAt: string;
+  transactions: Transaction[];
+  wallets: Wallet[];
+  budgets: Budget[];
+  jars: JarEnvelope[];
+  recurring: RecurringTransaction[];
+  debts: DebtLoanItem[];
+  scenarios: WhatIfScenario[];
+  challenges: FinancialChallenge[];
+}
+
+export const exportAllDataSnapshot = async (): Promise<DatabaseSnapshot> => {
+  const [transactions, wallets, budgets, jars, recurring, debts, scenarios, challenges] = await Promise.all([
+    fetchAllTransactions(),
+    fetchAllWallets(),
+    fetchAllBudgets(),
+    fetchAllJars(),
+    fetchAllRecurring(),
+    fetchAllDebts(),
+    fetchAllScenarios(),
+    fetchAllChallenges(),
+  ]);
+
+  return {
+    version: '1.0.0',
+    exportedAt: new Date().toISOString(),
+    transactions,
+    wallets,
+    budgets,
+    jars,
+    recurring,
+    debts,
+    scenarios,
+    challenges,
+  };
+};
+
+export const restoreDataSnapshot = async (snapshot: DatabaseSnapshot): Promise<boolean> => {
+  await initDatabase();
+  try {
+    if (snapshot.transactions) memoryTransactions = [...snapshot.transactions];
+    if (snapshot.wallets) memoryWallets = [...snapshot.wallets];
+    if (snapshot.budgets) memoryBudgets = [...snapshot.budgets];
+    if (snapshot.jars) memoryJars = [...snapshot.jars];
+    if (snapshot.recurring) memoryRecurring = [...snapshot.recurring];
+    if (snapshot.debts) memoryDebts = [...snapshot.debts];
+    if (snapshot.scenarios) memoryScenarios = [...snapshot.scenarios];
+    if (snapshot.challenges) memoryChallenges = [...snapshot.challenges];
+
+    if (!db || Platform.OS === 'web') return true;
+
+    await db.execAsync(`
+      DELETE FROM transactions;
+      DELETE FROM budgets;
+      DELETE FROM wallets;
+      DELETE FROM jars;
+      DELETE FROM recurring_transactions;
+      DELETE FROM debts_loans;
+      DELETE FROM whatif_scenarios;
+      DELETE FROM challenges;
+    `);
+
+    // Insert restored transactions
+    if (snapshot.transactions) {
+      for (const tx of snapshot.transactions) {
+        await db.runAsync(
+          `INSERT INTO transactions (id, title, amount, type, categoryId, categoryName, categoryIcon, categoryColor, categoryBg, date, formattedTime, paymentMethod, walletId, jarCode, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            tx.id,
+            tx.title,
+            tx.amount,
+            tx.type,
+            tx.category.id,
+            tx.category.name,
+            tx.category.icon,
+            tx.category.color,
+            tx.category.backgroundColor,
+            tx.date,
+            tx.formattedTime || null,
+            tx.paymentMethod,
+            tx.walletId || null,
+            tx.jarCode || null,
+            tx.note || null,
+          ]
+        );
+      }
+    }
+
+    // Insert restored wallets
+    if (snapshot.wallets) {
+      for (const w of snapshot.wallets) {
+        await db.runAsync(
+          `INSERT INTO wallets (id, name, type, balance, currency, icon, color, backgroundColor, accountNumber, creditLimit, isExcludedFromTotal)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [w.id, w.name, w.type, w.balance, w.currency, w.icon, w.color, w.backgroundColor, w.accountNumber || null, w.creditLimit || null, w.isExcludedFromTotal ? 1 : 0]
+        );
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Failed to restore snapshot:', err);
+    return false;
+  }
+};
+
+export const resetDatabaseToDefaults = async (): Promise<boolean> => {
+  await initDatabase();
+  try {
+    memoryTransactions = initialTransactions.map((t) => ({ ...t }));
+    memoryBudgets = initialBudgets.map((b) => ({ ...b }));
+    memoryWallets = initialWallets.map((w) => ({ ...w }));
+    memoryJars = initialJars.map((j) => ({ ...j }));
+    memoryRecurring = initialRecurring.map((r) => ({ ...r }));
+    memoryDebts = initialDebts.map((d) => ({ ...d }));
+    memoryScenarios = initialScenarios.map((s) => ({ ...s }));
+    memoryChallenges = initialChallenges.map((c) => ({ ...c }));
+
+    if (!db || Platform.OS === 'web') return true;
+
+    await db.execAsync(`
+      DELETE FROM transactions;
+      DELETE FROM budgets;
+      DELETE FROM wallets;
+      DELETE FROM jars;
+      DELETE FROM recurring_transactions;
+      DELETE FROM debts_loans;
+      DELETE FROM whatif_scenarios;
+      DELETE FROM challenges;
+    `);
+
+    // Re-seed Transactions
+    for (const tx of initialTransactions) {
+      await db.runAsync(
+        `INSERT INTO transactions (id, title, amount, type, categoryId, categoryName, categoryIcon, categoryColor, categoryBg, date, formattedTime, paymentMethod, walletId, jarCode, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          tx.id,
+          tx.title,
+          tx.amount,
+          tx.type,
+          tx.category.id,
+          tx.category.name,
+          tx.category.icon,
+          tx.category.color,
+          tx.category.backgroundColor,
+          tx.date,
+          tx.formattedTime || null,
+          tx.paymentMethod,
+          tx.walletId || null,
+          tx.jarCode || null,
+          tx.note || null,
+        ]
+      );
+    }
+
+    // Re-seed Budgets
+    for (const b of initialBudgets) {
+      await db.runAsync(
+        `INSERT INTO budgets (id, categoryId, categoryName, allocatedAmount, spentAmount, month, color)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [b.id, b.categoryId, b.categoryName, b.allocatedAmount, b.spentAmount, b.month, b.color]
+      );
+    }
+
+    // Re-seed Wallets
+    for (const w of initialWallets) {
+      await db.runAsync(
+        `INSERT INTO wallets (id, name, type, balance, currency, icon, color, backgroundColor, accountNumber, creditLimit, isExcludedFromTotal)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [w.id, w.name, w.type, w.balance, w.currency, w.icon, w.color, w.backgroundColor, w.accountNumber || null, w.creditLimit || null, w.isExcludedFromTotal ? 1 : 0]
+      );
+    }
+
+    // Re-seed Jars
+    for (const j of initialJars) {
+      await db.runAsync(
+        `INSERT INTO jars (id, code, name, vietnameseName, percentage, allocatedAmount, spentAmount, color, icon, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [j.id, j.code, j.name, j.vietnameseName, j.percentage, j.allocatedAmount, j.spentAmount, j.color, j.icon, j.description]
+      );
+    }
+
+    // Re-seed Recurring
+    for (const r of initialRecurring) {
+      await db.runAsync(
+        `INSERT INTO recurring_transactions (id, title, amount, type, categoryId, walletId, frequency, dayOfMonth, status, nextDueDate, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [r.id, r.title, r.amount, r.type, r.categoryId, r.walletId, r.frequency, r.dayOfMonth, r.status, r.nextDueDate, r.note || null]
+      );
+    }
+
+    // Re-seed Debts
+    for (const d of initialDebts) {
+      await db.runAsync(
+        `INSERT INTO debts_loans (id, personName, amount, type, dueDate, status, note, createdAt, phoneNumber)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [d.id, d.personName, d.amount, d.type, d.dueDate, d.status, d.note || null, d.createdAt, d.phoneNumber || null]
+      );
+    }
+
+    // Re-seed Scenarios
+    for (const s of initialScenarios) {
+      await db.runAsync(
+        `INSERT INTO whatif_scenarios (id, title, targetAmount, monthlyPayment, durationMonths, category, impactAssessment, recommendation, feasibilityScore, safeToBuy)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [s.id, s.title, s.targetAmount, s.monthlyPayment || null, s.durationMonths || null, s.category, s.impactAssessment, s.recommendation, s.feasibilityScore, s.safeToBuy ? 1 : 0]
+      );
+    }
+
+    // Re-seed Challenges
+    for (const c of initialChallenges) {
+      await db.runAsync(
+        `INSERT INTO challenges (id, title, description, targetDays, currentDays, potentialSavings, icon, status, badgeName)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [c.id, c.title, c.description, c.targetDays, c.currentDays, c.potentialSavings, c.icon, c.status, c.badgeName]
+      );
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Failed to reset database to defaults:', err);
+    return false;
+  }
+};

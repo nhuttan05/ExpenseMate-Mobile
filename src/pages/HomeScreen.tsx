@@ -19,6 +19,7 @@ import { loadSimulationData } from '../redux/slices/simulationSlice';
 import { useResponsive } from '../hooks/useResponsive';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
 import { AnimatedCard } from '../components/ui/AnimatedCard';
+import { CashflowTrendChart } from '../components/dashboard/CashflowTrendChart';
 import { mockUser } from '../data/mockData';
 
 interface HomeScreenProps {
@@ -265,7 +266,38 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </AnimatedCard>
       </View>
 
-      {/* 5. 6 CHIẾC LỌ TÀI CHÍNH (QUY TẮC PHÂN BỔ T. HARV EKER) */}
+      {/* 5. INTERACTIVE CASHFLOW TREND VISUALIZER (Bento Dynamic Bar Chart) */}
+      <AnimatedCard delay={180}>
+        <CashflowTrendChart
+          transactions={transactions}
+          onNavigateDetail={() => navigation.navigate('Statistics')}
+        />
+      </AnimatedCard>
+
+      {/* 6. AI FINANCIAL INSIGHT BANNER */}
+      <AnimatedCard delay={190} style={styles.aiInsightCard}>
+        <View style={styles.aiInsightHeader}>
+          <View style={styles.aiInsightBadge}>
+            <MaterialIcons name="smart-toy" size={14} color={Colors.primary} />
+            <Text style={styles.aiInsightBadgeText}>AI CỐ VẤN TÀI CHÍNH</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('AIAssistant')}
+            style={styles.aiActionBtn}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.aiActionBtnText}>Hỏi AI ngay</Text>
+            <MaterialIcons name="arrow-forward" size={14} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.aiInsightText}>
+          {savingsRate >= 30
+            ? '🔥 Bạn đang tiết kiệm xuất sắc (' + savingsRate + '% thu nhập). Hũ Tự Do Tài Chính (FFA) đã sẵn sàng để đầu tư sinh lời thêm!'
+            : '💡 Dòng tiền tuần này tương đối ổn định. Chú ý giữ Hũ Nhu Cầu Thiết Yếu (NEC) dưới 55% để không ảnh hưởng quỹ tiết kiệm dài hạn.'}
+        </Text>
+      </AnimatedCard>
+
+      {/* 7. 6 CHIẾC LỌ TÀI CHÍNH (QUY TẮC PHÂN BỔ T. HARV EKER) */}
       <AnimatedCard delay={200} style={styles.jarsCard}>
         <View style={styles.sectionHeaderRowInside}>
           <View style={styles.sectionTitleWithIcon}>
@@ -940,5 +972,49 @@ const styles = StyleSheet.create({
   txAmount: {
     fontSize: 15,
     fontWeight: '800',
+  },
+  aiInsightCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  aiInsightHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  aiInsightBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  aiInsightBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.primary,
+    letterSpacing: 0.5,
+  },
+  aiActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  aiActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  aiInsightText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    lineHeight: 18,
   },
 });
