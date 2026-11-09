@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors, DarkColors, Spacing, BorderRadius, Shadows } from '../constants/theme';
 import { useAppDispatch, useAppSelector } from '../redux/store';
 import { ApiService } from '../services/apiService';
@@ -171,6 +172,83 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     setEditIncome(user.monthlyIncome.toString());
     setEditExpense(user.monthlyExpense.toString());
     setEditProfileVisible(true);
+  };
+
+  // Tải ảnh đại diện: Điện thoại mở Album ảnh, Máy tính mở thư mục từ File Explorer
+  const pickImageFromDevice = async (isDirect: boolean = false) => {
+    try {
+      if (Platform.OS === 'web') {
+        // Trên Máy tính (Web): Mở File Explorer / Finder chọn ảnh từ thư mục máy tính
+        if (typeof document !== 'undefined') {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*';
+          input.style.display = 'none';
+
+          input.onchange = (e: any) => {
+            const file = e.target?.files?.[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (uploadEvent) => {
+                const base64Data = uploadEvent.target?.result as string;
+                if (base64Data) {
+                  if (isDirect) {
+                    dispatch(updateCurrentUserProfile({ avatarUrl: base64Data }));
+                    setUser((prev) => ({ ...prev, avatarUrl: base64Data }));
+                    showToast('📁 Đã cập nhật ảnh đại diện từ thư mục máy tính!');
+                  } else {
+                    setEditAvatar(base64Data);
+                    showToast('📁 Đã chọn ảnh từ thư mục máy tính!');
+                  }
+                }
+              };
+              reader.readAsDataURL(file);
+            }
+          };
+
+          document.body.appendChild(input);
+          input.click();
+          setTimeout(() => {
+            if (document.body.contains(input)) {
+              document.body.removeChild(input);
+            }
+          }, 1000);
+          return;
+        }
+      }
+
+      // Trên Điện thoại (iOS / Android): Mở Album ảnh / Thư viện ảnh
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        showToast('⚠️ Vui lòng cấp quyền truy cập Album ảnh trên điện thoại.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const newUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+
+        if (isDirect) {
+          dispatch(updateCurrentUserProfile({ avatarUrl: newUri }));
+          setUser((prev) => ({ ...prev, avatarUrl: newUri }));
+          showToast('🖼️ Đã cập nhật ảnh đại diện từ Album điện thoại!');
+        } else {
+          setEditAvatar(newUri);
+          showToast('🖼️ Đã chọn ảnh từ Album điện thoại!');
+        }
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải ảnh:', err);
+      showToast('❌ Không thể tải ảnh. Vui lòng thử lại!');
+    }
   };
 
   const handleSaveProfile = () => {
@@ -416,7 +494,24 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           onPress={handleOpenEditModal}
           activeOpacity={0.88}
         >
-          <Image source={{ uri: user.avatarUrl }} style={styles.avatarLarge} />
+          <View style={styles.avatarWrapper}>
+            <Image source={{ uri: user.avatarUrl }} style={styles.avatarLarge} />
+            <TouchableOpacity
+              style={[styles.avatarCameraBadge, { backgroundColor: theme.primary }]}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                pickImageFromDevice(true);
+              }}
+              activeOpacity={0.8}
+              accessibilityLabel={Platform.OS === 'web' ? 'Tải ảnh từ thư mục máy tính' : 'Chọn ảnh từ Album điện thoại'}
+            >
+              <MaterialIcons
+                name={Platform.OS === 'web' ? 'folder-open' : 'photo-camera'}
+                size={14}
+                color="#FFF"
+              />
+            </TouchableOpacity>
+          </View>
           <View style={styles.profileDetails}>
             <View style={styles.badgeRow}>
               <Text style={[styles.userName, { color: theme.textPrimary }]}>{user.name}</Text>
@@ -768,14 +863,62 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 </Text>
               </View>
 
-              <Text style={[styles.inputSectionLabel, { color: theme.textMuted }]}>CHỌN ẢNH ĐẠI DIỆN</Text>
+              <Text style={[styles.inputSectionLabel, { color: theme.textMuted }]}>ẢNH ĐẠI DIỆN KHÁCH HÀNG</Text>
+
+              {/* Hộp tải ảnh lên: Điện thoại mở Album, Máy tính mở Thư mục */}
+              <View
+                style={[
+                  styles.avatarUploadCard,
+                  { backgroundColor: theme.surfaceContainerLow, borderColor: theme.border },
+                ]}
+              >
+                <View style={styles.avatarUploadPreviewContainer}>
+                  <Image source={{ uri: editAvatar }} style={styles.avatarUploadPreview} />
+                  <View style={[styles.avatarUploadCameraBadge, { backgroundColor: theme.primary }]}>
+                    <MaterialIcons
+                      name={Platform.OS === 'web' ? 'folder' : 'photo-library'}
+                      size={14}
+                      color="#FFF"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.avatarUploadInfo}>
+                  <TouchableOpacity
+                    style={[styles.avatarUploadActionBtn, { backgroundColor: theme.primary }]}
+                    onPress={() => pickImageFromDevice(false)}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialIcons
+                      name={Platform.OS === 'web' ? 'folder-open' : 'photo-library'}
+                      size={18}
+                      color="#FFF"
+                    />
+                    <Text style={styles.avatarUploadActionBtnText}>
+                      {Platform.OS === 'web'
+                        ? 'Tải ảnh lên từ thư mục máy tính'
+                        : 'Chọn ảnh trong Album điện thoại'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <Text style={[styles.avatarUploadHintText, { color: theme.textMuted }]}>
+                    {Platform.OS === 'web'
+                      ? '📁 Nhấn để mở File Explorer chọn file ảnh từ máy tính (JPG, PNG, WebP)'
+                      : '🖼️ Nhấn để mở Album ảnh / Thư viện trên thiết bị di động'}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={[styles.inputSectionSubLabel, { color: theme.textMuted }]}>
+                HOẶC CHỌN ẢNH MẪU CÓ SẴN
+              </Text>
               <View style={styles.avatarPickerRow}>
                 {AVATAR_OPTIONS.map((uri, idx) => (
                   <TouchableOpacity
                     key={idx}
                     style={[
                       styles.avatarPickItem,
-                      editAvatar === uri && { borderColor: theme.primary },
+                      editAvatar === uri && { borderColor: theme.primary, borderWidth: 2 },
                     ]}
                     onPress={() => setEditAvatar(uri)}
                   >
@@ -1367,12 +1510,28 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     borderWidth: 1,
   },
+  avatarWrapper: {
+    position: 'relative',
+  },
   avatarLarge: {
     width: 64,
     height: 64,
     borderRadius: BorderRadius.full,
     borderWidth: 2,
     borderColor: Colors.borderEmerald,
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+    ...Shadows.floating,
   },
   profileDetails: {
     flex: 1,
@@ -1574,6 +1733,66 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: Spacing.xs,
     marginTop: Spacing.md,
+  },
+  inputSectionSubLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    marginTop: Spacing.xs,
+  },
+  avatarUploadCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+    gap: Spacing.md,
+  },
+  avatarUploadPreviewContainer: {
+    position: 'relative',
+  },
+  avatarUploadPreview: {
+    width: 62,
+    height: 62,
+    borderRadius: BorderRadius.full,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+  },
+  avatarUploadCameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  avatarUploadInfo: {
+    flex: 1,
+    gap: 6,
+  },
+  avatarUploadActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.lg,
+    gap: 8,
+  },
+  avatarUploadActionBtnText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  avatarUploadHintText: {
+    fontSize: 11,
+    lineHeight: 15,
   },
   avatarPickerRow: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
+  Platform,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, DarkColors, Spacing, BorderRadius, Shadows } from '../constants/theme';
@@ -13,7 +16,8 @@ import { formatCurrency, getJarName, getJarShortName } from '../utils/formatters
 import { useAppDispatch, useAppSelector } from '../redux/store';
 import { toggleBalanceVisibility, loadTransactions } from '../redux/slices/expenseSlice';
 import { loadBudgets } from '../redux/slices/budgetSlice';
-import { loadWalletsAndJars } from '../redux/slices/walletSlice';
+import { loadWalletsAndJars, updateAllJarsAsync } from '../redux/slices/walletSlice';
+import { updateCurrentUserProfile } from '../redux/slices/authSlice';
 import { loadRecurringAndDebts } from '../redux/slices/recurringSlice';
 import { loadSimulationData } from '../redux/slices/simulationSlice';
 import { useResponsive } from '../hooks/useResponsive';
@@ -21,6 +25,7 @@ import { ScreenContainer } from '../components/layout/ScreenContainer';
 import { AnimatedCard } from '../components/ui/AnimatedCard';
 import { CashflowTrendChart } from '../components/dashboard/CashflowTrendChart';
 import { mockUser } from '../data/mockData';
+import { JarEnvelope } from '../types';
 
 interface HomeScreenProps {
   navigation: any;
@@ -53,12 +58,162 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     return sum + w.balance;
   }, 0);
 
-  const monthlyIncome = user.monthlyIncome || 35000000;
-  const monthlyExpense = user.monthlyExpense || 18200000;
-  const savingsRate = Math.round(((monthlyIncome - monthlyExpense) / monthlyIncome) * 100);
+  // Tính toán thu nhập và chi tiêu realtime từ transactions
+  const totalIncomeFromTx = transactions
+    .filter((t) => t.type === 'INCOME')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalExpenseFromTx = transactions
+    .filter((t) => t.type === 'EXPENSE')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const monthlyIncome = totalIncomeFromTx > 0 ? totalIncomeFromTx : (user.monthlyIncome || 35000000);
+  const monthlyExpense = totalExpenseFromTx > 0 ? totalExpenseFromTx : (user.monthlyExpense || 18200000);
+  const savingsRate = Math.max(0, Math.round(((monthlyIncome - monthlyExpense) / monthlyIncome) * 100));
+
+  // TÍNH TOÁN REALTIME CHO 6 HŨ TÀI CHÍNH (Đồng bộ trực tiếp theo các giao dịch thực tế)
+  const realtimeJars = useMemo(() => {
+    return jars.map((jar) => {
+      // Tổng chi tiêu EXPENSE thực tế thuộc về hũ này từ các giao dịch
+      const txSpent = transactions
+        .filter(
+          (t) =>
+            t.type === 'EXPENSE' &&
+            (t.jarCode === jar.code || t.category?.jarCode === jar.code)
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const effectiveSpent = txSpent > 0 ? txSpent : jar.spentAmount;
+
+      return {
+        ...jar,
+        spentAmount: effectiveSpent,
+      };
+    });
+  }, [jars, transactions]);
 
   const pendingDebtsCount = debtsList.filter((d) => d.status === 'PENDING').length;
   const activeRecurringCount = recurringList.filter((r) => r.status === 'ACTIVE').length;
+
+  // Điều khiển cuộn ngang hệ thống ví ảo đa tầng
+  const walletsScrollRef = useRef<any>(null);
+  const [walletScrollX, setWalletScrollX] = useState(0);
+
+  const scrollWallets = (direction: 'left' | 'right') => {
+    const scrollStep = 240;
+    const nextX = direction === 'left' ? Math.max(0, walletScrollX - scrollStep) : walletScrollX + scrollStep;
+    walletsScrollRef.current?.scrollTo({ x: nextX, animated: true });
+    setWalletScrollX(nextX);
+  };
+
+  const handleWalletWheel = (e: any) => {
+    if (Platform.OS === 'web' && walletsScrollRef.current) {
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (delta !== 0) {
+        const nextX = Math.max(0, walletScrollX + delta);
+        walletsScrollRef.current.scrollTo({ x: nextX, animated: false });
+        setWalletScrollX(nextX);
+      }
+    }
+  };
+
+  // State Cài Đặt Hạn Mức 6 Hũ Chi Tiêu Theo Túi Tiền
+  const [isJarModalOpen, setIsJarModalOpen] = useState(false);
+  const [jarModalIncome, setJarModalIncome] = useState(monthlyIncome.toString());
+  const [tempJars, setTempJars] = useState<JarEnvelope[]>([]);
+  const [jarConfigTab, setJarConfigTab] = useState<'PERCENT' | 'AMOUNT'>('PERCENT');
+  const [saveSuccessNotice, setSaveSuccessNotice] = useState<string | null>(null);
+
+  const handleOpenJarSettings = () => {
+    setJarModalIncome(monthlyIncome.toString());
+    setTempJars(jars.map((j) => ({ ...j })));
+    setSaveSuccessNotice(null);
+    setIsJarModalOpen(true);
+  };
+
+  const handleApplyPreset = (presetType: 'DEFAULT' | 'INVEST' | 'SAVING' | 'BALANCED') => {
+    const incomeVal = parseFloat(jarModalIncome) || monthlyIncome;
+    let percentages: Record<string, number> = {
+      NEC: 55,
+      FFA: 10,
+      LTSS: 10,
+      EDU: 10,
+      PLAY: 10,
+      GIVE: 5,
+    };
+
+    if (presetType === 'INVEST') {
+      percentages = { NEC: 45, FFA: 25, LTSS: 10, EDU: 10, PLAY: 5, GIVE: 5 };
+    } else if (presetType === 'SAVING') {
+      percentages = { NEC: 50, FFA: 10, LTSS: 20, EDU: 10, PLAY: 5, GIVE: 5 };
+    } else if (presetType === 'BALANCED') {
+      percentages = { NEC: 50, FFA: 15, LTSS: 10, EDU: 10, PLAY: 10, GIVE: 5 };
+    }
+
+    setTempJars((prev) =>
+      prev.map((j) => {
+        const pct = percentages[j.code] ?? j.percentage;
+        return {
+          ...j,
+          percentage: pct,
+          allocatedAmount: Math.round((incomeVal * pct) / 100),
+        };
+      })
+    );
+  };
+
+  const handleJarPercentageChange = (code: string, newPct: number) => {
+    const incomeVal = parseFloat(jarModalIncome) || monthlyIncome;
+    const clampedPct = Math.max(0, Math.min(100, newPct));
+    setTempJars((prev) =>
+      prev.map((j) =>
+        j.code === code
+          ? {
+              ...j,
+              percentage: clampedPct,
+              allocatedAmount: Math.round((incomeVal * clampedPct) / 100),
+            }
+          : j
+      )
+    );
+  };
+
+  const handleJarAmountChange = (code: string, newAmountStr: string) => {
+    const incomeVal = parseFloat(jarModalIncome) || monthlyIncome;
+    const amountVal = parseFloat(newAmountStr.replace(/[^0-9]/g, '')) || 0;
+    const calculatedPct = incomeVal > 0 ? Math.round((amountVal / incomeVal) * 100) : 0;
+
+    setTempJars((prev) =>
+      prev.map((j) =>
+        j.code === code
+          ? {
+              ...j,
+              allocatedAmount: amountVal,
+              percentage: calculatedPct,
+            }
+          : j
+      )
+    );
+  };
+
+  const handleSaveJarSettings = async () => {
+    const incomeVal = parseFloat(jarModalIncome) || monthlyIncome;
+
+    if (incomeVal !== user.monthlyIncome) {
+      dispatch(updateCurrentUserProfile({ monthlyIncome: incomeVal }));
+    }
+
+    await dispatch(updateAllJarsAsync(tempJars));
+
+    setSaveSuccessNotice('Đã lưu thành công hạn mức 6 hũ theo túi tiền của bạn!');
+    setTimeout(() => {
+      setIsJarModalOpen(false);
+      setSaveSuccessNotice(null);
+    }, 700);
+  };
+
+  const totalTempPercentage = tempJars.reduce((sum, j) => sum + j.percentage, 0);
+  const totalTempAllocated = tempJars.reduce((sum, j) => sum + j.allocatedAmount, 0);
 
   return (
     <ScreenContainer>
@@ -171,59 +326,118 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <View style={styles.sectionHeaderRow}>
         <View style={styles.sectionTitleWithIcon}>
           <MaterialIcons name="account-balance" size={20} color={Colors.primary} />
-          <Text style={styles.sectionTitle}>Hệ Thống Ví Ảo Đa Tầng</Text>
+          <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Hệ Thống Ví Ảo Đa Tầng</Text>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Wallets')} activeOpacity={0.7}>
-          <Text style={styles.sectionSeeAll}>Quản lý ({wallets.length})</Text>
-        </TouchableOpacity>
+
+        <View style={styles.walletHeaderActions}>
+          {/* Nút điều hướng cuộn ngang sang trái / phải khi có ví bị khuất */}
+          <View style={styles.walletScrollButtonsRow}>
+            <TouchableOpacity
+              style={[
+                styles.walletScrollNavBtn,
+                { backgroundColor: theme.surfaceContainerLow, borderColor: theme.border },
+                walletScrollX <= 5 && styles.walletScrollNavBtnDisabled,
+              ]}
+              onPress={() => scrollWallets('left')}
+              disabled={walletScrollX <= 5}
+              activeOpacity={0.7}
+              accessibilityLabel="Cuộn sang trái"
+            >
+              <MaterialIcons
+                name="chevron-left"
+                size={20}
+                color={walletScrollX <= 5 ? theme.textMuted : theme.primary}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.walletScrollNavBtn,
+                { backgroundColor: theme.surfaceContainerLow, borderColor: theme.border },
+              ]}
+              onPress={() => scrollWallets('right')}
+              activeOpacity={0.7}
+              accessibilityLabel="Cuộn sang phải"
+            >
+              <MaterialIcons name="chevron-right" size={20} color={theme.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity onPress={() => navigation.navigate('Wallets')} activeOpacity={0.7}>
+            <Text style={styles.sectionSeeAll}>Quản lý ({wallets.length})</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.walletsScrollContent}
-      >
-        {wallets.map((wallet) => (
-          <TouchableOpacity
-            key={wallet.id}
-            style={[styles.walletCard, { borderColor: wallet.color + '40' }]}
-            onPress={() => navigation.navigate('Wallets')}
-            activeOpacity={0.85}
-          >
-            <View style={styles.walletCardHeader}>
-              <View style={[styles.walletIconBox, { backgroundColor: wallet.backgroundColor }]}>
-                <MaterialIcons name={wallet.icon as any} size={20} color={wallet.color} />
-              </View>
-              <Text style={styles.walletAccountNo}>{wallet.accountNumber || 'Ví chính'}</Text>
-            </View>
-
-            <Text style={styles.walletName} numberOfLines={1}>
-              {wallet.name}
-            </Text>
-
-            <Text
-              style={[
-                styles.walletBalance,
-                wallet.balance < 0 ? { color: Colors.expense } : { color: Colors.textPrimary },
-              ]}
-            >
-              {isBalanceVisible ? formatCurrency(wallet.balance) : '••••••'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-
-        {/* Add Wallet Card */}
-        <TouchableOpacity
-          style={styles.addWalletCard}
-          onPress={() => navigation.navigate('Wallets')}
-          activeOpacity={0.75}
+      <View style={styles.walletsSliderWrapper}>
+        <ScrollView
+          ref={walletsScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={Platform.OS === 'web'}
+          contentContainerStyle={styles.walletsScrollContent}
+          onScroll={(e) => {
+            setWalletScrollX(e.nativeEvent.contentOffset.x);
+          }}
+          scrollEventThrottle={16}
+          {...(Platform.OS === 'web'
+            ? {
+                onWheel: handleWalletWheel,
+              }
+            : {})}
         >
-          <View style={styles.addWalletIconBox}>
-            <MaterialIcons name="add" size={24} color={Colors.primary} />
-          </View>
-          <Text style={styles.addWalletText}>Thêm ví mới</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          {wallets.map((wallet) => (
+            <TouchableOpacity
+              key={wallet.id}
+              style={[
+                styles.walletCard,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: wallet.color + '40',
+                },
+              ]}
+              onPress={() => navigation.navigate('Wallets')}
+              activeOpacity={0.85}
+            >
+              <View style={styles.walletCardHeader}>
+                <View style={[styles.walletIconBox, { backgroundColor: wallet.backgroundColor }]}>
+                  <MaterialIcons name={wallet.icon as any} size={20} color={wallet.color} />
+                </View>
+                <Text style={[styles.walletAccountNo, { color: theme.textMuted }]}>
+                  {wallet.accountNumber || 'Ví chính'}
+                </Text>
+              </View>
+
+              <Text style={[styles.walletName, { color: theme.textSecondary }]} numberOfLines={1}>
+                {wallet.name}
+              </Text>
+
+              <Text
+                style={[
+                  styles.walletBalance,
+                  wallet.balance < 0 ? { color: Colors.expense } : { color: theme.textPrimary },
+                ]}
+              >
+                {isBalanceVisible ? formatCurrency(wallet.balance) : '••••••'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+
+          {/* Add Wallet Card */}
+          <TouchableOpacity
+            style={[
+              styles.addWalletCard,
+              { backgroundColor: theme.surfaceContainerLow, borderColor: theme.border },
+            ]}
+            onPress={() => navigation.navigate('Wallets')}
+            activeOpacity={0.75}
+          >
+            <View style={styles.addWalletIconBox}>
+              <MaterialIcons name="add" size={24} color={Colors.primary} />
+            </View>
+            <Text style={styles.addWalletText}>Thêm ví mới</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
 
       {/* 4. BENTO GRID 2 COLUMNS (Health Score & Monthly Cashflow) */}
       <View style={[styles.bentoRow, isTablet && { flexWrap: 'nowrap' }]}>
@@ -311,52 +525,72 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </Text>
       </AnimatedCard>
 
-      {/* 7. 6 CHIẾC LỌ TÀI CHÍNH (QUY TẮC PHÂN BỔ T. HARV EKER) */}
-      <AnimatedCard delay={200} style={styles.jarsCard}>
+      {/* 7. 6 CHIẾC LỌ TÀI CHÍNH (QUY TẮC PHÂN BỔ T. HARV EKER - HIỂN THỊ REALTIME) */}
+      <AnimatedCard delay={200} style={[styles.jarsCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <View style={styles.sectionHeaderRowInside}>
           <View style={styles.sectionTitleWithIcon}>
             <MaterialIcons name="savings" size={20} color={Colors.primary} />
-            <Text style={styles.cardHeaderTitle}>6 Hũ Quản Lý Chi Tiêu (Quy Tắc 6 Chiếc Lọ)</Text>
+            <Text style={[styles.cardHeaderTitle, { color: theme.textPrimary }]}>
+              6 Hũ Quản Lý Chi Tiêu (Quy Tắc 6 Chiếc Lọ)
+            </Text>
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate('Budget')} activeOpacity={0.7}>
-            <Text style={styles.sectionSeeAll}>Xem chi tiết</Text>
-          </TouchableOpacity>
+          <View style={styles.jarsCardHeaderActions}>
+            <TouchableOpacity
+              style={[styles.jarSettingsBtn, { backgroundColor: theme.primaryLight }]}
+              onPress={handleOpenJarSettings}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="tune" size={14} color={theme.primary} />
+              <Text style={[styles.jarSettingsBtnText, { color: theme.primary }]}>Cài đặt hạn mức</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => navigation.navigate('Budget')} activeOpacity={0.7}>
+              <Text style={styles.sectionSeeAll}>Chi tiết</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <Text style={styles.jarsDescription}>
-          Phương pháp phân bổ thu nhập thông minh theo chuẩn T. Harv Eker giúp kiểm soát dòng tiền bền vững.
+        <Text style={[styles.jarsDescription, { color: theme.textMuted }]}>
+          Hạn mức tự động cân đối theo túi tiền của bạn. Tiến độ chi tiêu cập nhật thời gian thực (Realtime) từ các giao dịch.
         </Text>
 
         <View style={styles.jarsGrid}>
-          {jars.map((jar) => {
-            const spentPercent = Math.min(100, Math.round((jar.spentAmount / jar.allocatedAmount) * 100));
+          {realtimeJars.map((jar) => {
+            const spentPercent = jar.allocatedAmount > 0
+              ? Math.min(100, Math.round((jar.spentAmount / jar.allocatedAmount) * 100))
+              : 0;
             const isWarning = spentPercent >= 80;
             const jarVietnameseTitle = getJarName(jar.code);
             const remainingAmount = Math.max(0, jar.allocatedAmount - jar.spentAmount);
 
             return (
-              <View key={jar.id} style={styles.jarItem}>
+              <TouchableOpacity
+                key={jar.id}
+                style={[styles.jarItem, { backgroundColor: theme.surfaceContainerLow }]}
+                onPress={handleOpenJarSettings}
+                activeOpacity={0.85}
+              >
                 <View style={styles.jarItemHeader}>
                   <View style={styles.jarBadgeWithIcon}>
                     <View style={[styles.jarMiniDot, { backgroundColor: jar.color }]} />
-                    <Text style={styles.jarNameText}>{jarVietnameseTitle}</Text>
-                    <View style={styles.jarPercentBadge}>
-                      <Text style={styles.jarPercentText}>{jar.percentage}%</Text>
+                    <Text style={[styles.jarNameText, { color: theme.textPrimary }]}>{jarVietnameseTitle}</Text>
+                    <View style={[styles.jarPercentBadge, { backgroundColor: theme.surface }]}>
+                      <Text style={[styles.jarPercentText, { color: theme.textSecondary }]}>{jar.percentage}%</Text>
                     </View>
                   </View>
 
                   {isWarning ? (
                     <View style={styles.warningPill}>
                       <MaterialIcons name="warning" size={12} color={Colors.expense} />
-                      <Text style={styles.warningPillText}>Đã tiêu {spentPercent}% (Vượt 80%)</Text>
+                      <Text style={styles.warningPillText}>Đã tiêu {spentPercent}% (Cảnh báo vượt 80%)</Text>
                     </View>
                   ) : (
-                    <Text style={styles.jarSpentPercent}>Đã dùng {spentPercent}%</Text>
+                    <Text style={[styles.jarSpentPercent, { color: theme.textSecondary }]}>Đã dùng {spentPercent}%</Text>
                   )}
                 </View>
 
                 {/* Progress bar */}
-                <View style={styles.jarProgressBarTrack}>
+                <View style={[styles.jarProgressBarTrack, { backgroundColor: isDarkMode ? '#1E293B' : '#E2E8F0' }]}>
                   <View
                     style={[
                       styles.jarProgressBarFill,
@@ -369,18 +603,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 </View>
 
                 <View style={styles.jarMoneyRow}>
-                  <Text style={styles.jarMoneyLeft}>
-                    Đã chi: <Text style={styles.boldText}>{formatCurrency(jar.spentAmount)}</Text> / {formatCurrency(jar.allocatedAmount)}
+                  <Text style={[styles.jarMoneyLeft, { color: theme.textSecondary }]}>
+                    Đã chi: <Text style={[styles.boldText, { color: theme.textPrimary }]}>{formatCurrency(jar.spentAmount)}</Text> / {formatCurrency(jar.allocatedAmount)}
                   </Text>
                   <Text style={[styles.jarMoneyRight, isWarning ? { color: Colors.expense } : { color: Colors.income }]}>
                     Còn lại: {formatCurrency(remainingAmount)}
                   </Text>
                 </View>
 
-                <Text style={styles.jarSubtext}>
+                <Text style={[styles.jarSubtext, { color: theme.textMuted }]}>
                   {jar.description}
                 </Text>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -460,6 +694,269 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       {/* Spacing for bottom tab bar */}
       <View style={{ height: 100 }} />
+
+      {/* MODAL CÀI ĐẶT HẠN MỨC 6 HŨ THEO TÚI TIỀN */}
+      <Modal
+        visible={isJarModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsJarModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+            {/* Header Modal */}
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
+                  Cài Đặt Hạn Mức 6 Hũ Chi Tiêu
+                </Text>
+                <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+                  Thiết lập hạn mức phân bổ theo túi tiền thực tế của bạn
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsJarModalOpen(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="close" size={24} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Thông báo lưu thành công */}
+            {saveSuccessNotice && (
+              <View style={styles.successBanner}>
+                <MaterialIcons name="check-circle" size={18} color="#166534" />
+                <Text style={styles.successBannerText}>{saveSuccessNotice}</Text>
+              </View>
+            )}
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Spacing.xl }}>
+              {/* Card Thu Nhập Hàng Tháng Của Túi Tiền */}
+              <View style={[styles.incomeConfigCard, { backgroundColor: theme.surfaceContainerLow, borderColor: theme.border }]}>
+                <View style={styles.incomeConfigHeader}>
+                  <MaterialIcons name="account-balance-wallet" size={20} color={theme.primary} />
+                  <Text style={[styles.incomeConfigLabel, { color: theme.textPrimary }]}>
+                    Thu nhập / Túi tiền hàng tháng của bạn
+                  </Text>
+                </View>
+
+                <View style={[styles.incomeInputRow, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+                  <TextInput
+                    style={[styles.incomeInput, { color: theme.textPrimary }]}
+                    value={jarModalIncome}
+                    onChangeText={(val) => {
+                      setJarModalIncome(val);
+                      const inc = parseFloat(val) || 0;
+                      setTempJars((prev) =>
+                        prev.map((j) => ({
+                          ...j,
+                          allocatedAmount: Math.round((inc * j.percentage) / 100),
+                        }))
+                      );
+                    }}
+                    placeholder="35000000"
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="numeric"
+                  />
+                  <Text style={[styles.currencySuffix, { color: theme.primary }]}>VNĐ / tháng</Text>
+                </View>
+
+                <Text style={[styles.incomeHelperText, { color: theme.textMuted }]}>
+                  💡 Khi bạn thay đổi thu nhập, hạn mức đề xuất của từng hũ sẽ tự động điều chỉnh theo % phân bổ.
+                </Text>
+              </View>
+
+              {/* Nhóm Nút Cấu Hình Nhanh (Presets) */}
+              <Text style={[styles.groupTitleLabel, { color: theme.textSecondary }]}>
+                BỘ CẤU HÌNH NHANH THEO MỤC TIÊU:
+              </Text>
+              <View style={styles.presetsRow}>
+                <TouchableOpacity
+                  style={[styles.presetChip, { borderColor: theme.primary, backgroundColor: theme.primaryLight }]}
+                  onPress={() => handleApplyPreset('DEFAULT')}
+                >
+                  <Text style={[styles.presetChipText, { color: theme.primary }]}>
+                    ⭐ Chuẩn Eker (55-10-10-10-10-5%)
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.presetChip, { borderColor: '#0284C7', backgroundColor: '#F0F9FF' }]}
+                  onPress={() => handleApplyPreset('INVEST')}
+                >
+                  <Text style={[styles.presetChipText, { color: '#0284C7' }]}>
+                    📈 Đầu tư & Tự do (45-25-10-10-5-5%)
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.presetChip, { borderColor: '#D97706', backgroundColor: '#FFFBEB' }]}
+                  onPress={() => handleApplyPreset('SAVING')}
+                >
+                  <Text style={[styles.presetChipText, { color: '#D97706' }]}>
+                    🛡️ Tối ưu tích lũy (50-10-20-10-5-5%)
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.presetChip, { borderColor: '#7C3AED', backgroundColor: '#FAF5FF' }]}
+                  onPress={() => handleApplyPreset('BALANCED')}
+                >
+                  <Text style={[styles.presetChipText, { color: '#7C3AED' }]}>
+                    ⚖️ Cân bằng linh hoạt (50-15-10-10-10-5%)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Chuyển đổi Tab Điều Chỉnh: Theo % hoặc Theo Tiền VNĐ */}
+              <View style={[styles.tabToggleRow, { backgroundColor: theme.surfaceContainerLow, borderColor: theme.border }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.tabToggleBtn,
+                    jarConfigTab === 'PERCENT' && { backgroundColor: theme.primary },
+                  ]}
+                  onPress={() => setJarConfigTab('PERCENT')}
+                >
+                  <Text
+                    style={[
+                      styles.tabToggleBtnText,
+                      { color: jarConfigTab === 'PERCENT' ? '#FFF' : theme.textSecondary },
+                    ]}
+                  >
+                    Điều chỉnh theo tỷ lệ %
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.tabToggleBtn,
+                    jarConfigTab === 'AMOUNT' && { backgroundColor: theme.primary },
+                  ]}
+                  onPress={() => setJarConfigTab('AMOUNT')}
+                >
+                  <Text
+                    style={[
+                      styles.tabToggleBtnText,
+                      { color: jarConfigTab === 'AMOUNT' ? '#FFF' : theme.textSecondary },
+                    ]}
+                  >
+                    Nhập số tiền hạn mức (VNĐ)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Danh sách 6 Hũ tùy chỉnh */}
+              <View style={styles.jarsEditList}>
+                {tempJars.map((jar) => {
+                  const jarTitle = getJarName(jar.code);
+                  return (
+                    <View
+                      key={jar.id}
+                      style={[
+                        styles.jarEditCard,
+                        { backgroundColor: theme.surface, borderColor: theme.border },
+                      ]}
+                    >
+                      <View style={styles.jarEditHeader}>
+                        <View style={styles.jarEditTitleRow}>
+                          <View style={[styles.jarMiniDot, { backgroundColor: jar.color }]} />
+                          <Text style={[styles.jarEditName, { color: theme.textPrimary }]}>
+                            {jarTitle}
+                          </Text>
+                        </View>
+                        <Text style={[styles.jarEditCurrentAmount, { color: theme.primary }]}>
+                          {formatCurrency(jar.allocatedAmount)}
+                        </Text>
+                      </View>
+
+                      {jarConfigTab === 'PERCENT' ? (
+                        <View style={styles.pctStepperRow}>
+                          <TouchableOpacity
+                            style={[styles.pctStepBtn, { borderColor: theme.border, backgroundColor: theme.surfaceContainerLow }]}
+                            onPress={() => handleJarPercentageChange(jar.code, jar.percentage - 5)}
+                          >
+                            <MaterialIcons name="remove" size={16} color={theme.textPrimary} />
+                          </TouchableOpacity>
+
+                          <View style={styles.pctValueBox}>
+                            <Text style={[styles.pctValueText, { color: theme.textPrimary }]}>
+                              {jar.percentage}%
+                            </Text>
+                          </View>
+
+                          <TouchableOpacity
+                            style={[styles.pctStepBtn, { borderColor: theme.border, backgroundColor: theme.surfaceContainerLow }]}
+                            onPress={() => handleJarPercentageChange(jar.code, jar.percentage + 5)}
+                          >
+                            <MaterialIcons name="add" size={16} color={theme.textPrimary} />
+                          </TouchableOpacity>
+
+                          <Text style={[styles.pctEquivalentText, { color: theme.textMuted }]}>
+                            = {formatCurrency(jar.allocatedAmount)}
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.amountInputRow}>
+                          <TextInput
+                            style={[
+                              styles.amountInput,
+                              { backgroundColor: theme.surfaceContainerLow, color: theme.textPrimary, borderColor: theme.border },
+                            ]}
+                            value={jar.allocatedAmount.toString()}
+                            onChangeText={(val) => handleJarAmountChange(jar.code, val)}
+                            keyboardType="numeric"
+                            placeholder="Nhập số tiền hạn mức"
+                            placeholderTextColor={theme.textMuted}
+                          />
+                          <Text style={[styles.amountEquivalentPct, { color: theme.textMuted }]}>
+                            Tương đương {jar.percentage}%
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* Tổng kết và cảnh báo */}
+              <View style={[styles.summaryFooterBox, { backgroundColor: theme.surfaceContainerLow, borderColor: theme.border }]}>
+                <View style={styles.summaryFooterRow}>
+                  <Text style={[styles.summaryFooterLabel, { color: theme.textSecondary }]}>
+                    Tổng tỷ lệ phân bổ:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.summaryFooterValue,
+                      totalTempPercentage === 100 ? { color: '#166534' } : { color: Colors.expense },
+                    ]}
+                  >
+                    {totalTempPercentage}% {totalTempPercentage === 100 ? '(Chuẩn 100%)' : '(Cần cân đối đủ 100%)'}
+                  </Text>
+                </View>
+
+                <View style={styles.summaryFooterRow}>
+                  <Text style={[styles.summaryFooterLabel, { color: theme.textSecondary }]}>
+                    Tổng hạn mức 6 hũ:
+                  </Text>
+                  <Text style={[styles.summaryFooterValue, { color: theme.textPrimary }]}>
+                    {formatCurrency(totalTempAllocated)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Nút Lưu Cài Đặt */}
+              <TouchableOpacity
+                style={[styles.saveModalBtn, { backgroundColor: theme.primary }]}
+                onPress={handleSaveJarSettings}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="check" size={20} color="#FFF" />
+                <Text style={styles.saveModalBtnText}>Lưu Cài Đặt Hạn Mức 6 Hũ</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 };
@@ -649,10 +1146,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.primary,
   },
+  walletHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  walletScrollButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginRight: 2,
+  },
+  walletScrollNavBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadows.card,
+  },
+  walletScrollNavBtnDisabled: {
+    opacity: 0.35,
+  },
+  walletsSliderWrapper: {
+    position: 'relative',
+    width: '100%',
+  },
 
   // WALLETS SCROLL
   walletsScrollContent: {
-    paddingBottom: Spacing.lg,
+    paddingBottom: Spacing.md,
+    paddingRight: Spacing.xl,
     gap: Spacing.md,
   },
   walletCard: {
@@ -832,6 +1357,23 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
     ...Shadows.card,
   },
+  jarsCardHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  jarSettingsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  jarSettingsBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   jarsDescription: {
     fontSize: 12,
     color: Colors.textMuted,
@@ -842,6 +1384,10 @@ const styles = StyleSheet.create({
   },
   jarItem: {
     gap: 4,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   jarItemHeader: {
     flexDirection: 'row',
@@ -928,6 +1474,240 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     lineHeight: 16,
     marginTop: 2,
+  },
+
+  // JARS CONFIG MODAL STYLES
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    borderTopLeftRadius: BorderRadius.xxl,
+    borderTopRightRadius: BorderRadius.xxl,
+    padding: Spacing.xl,
+    maxHeight: '90%',
+    maxWidth: 540,
+    width: '100%',
+    alignSelf: 'center',
+    ...Shadows.floating,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#DCFCE7',
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+  },
+  successBannerText: {
+    color: '#166534',
+    fontSize: 12,
+    fontWeight: '700',
+    flex: 1,
+  },
+  incomeConfigCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+  },
+  incomeConfigHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: Spacing.xs,
+  },
+  incomeConfigLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  incomeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    height: 46,
+    marginTop: 4,
+  },
+  incomeInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  currencySuffix: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  incomeHelperText: {
+    fontSize: 11,
+    marginTop: 6,
+    lineHeight: 15,
+  },
+  groupTitleLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    marginTop: Spacing.xs,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: Spacing.md,
+  },
+  presetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  presetChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  tabToggleRow: {
+    flexDirection: 'row',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+    overflow: 'hidden',
+  },
+  tabToggleBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabToggleBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  jarsEditList: {
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  jarEditCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    gap: Spacing.xs,
+  },
+  jarEditHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  jarEditTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  jarEditName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  jarEditCurrentAmount: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  pctStepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  pctStepBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pctValueBox: {
+    width: 44,
+    alignItems: 'center',
+  },
+  pctValueText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  pctEquivalentText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  amountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  amountInput: {
+    flex: 1,
+    height: 38,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.sm,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  amountEquivalentPct: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  summaryFooterBox: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+    gap: 4,
+  },
+  summaryFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  summaryFooterLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  summaryFooterValue: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  saveModalBtn: {
+    height: 48,
+    borderRadius: BorderRadius.lg,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: Spacing.md,
+  },
+  saveModalBtnText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '800',
   },
 
   // TRANSACTIONS

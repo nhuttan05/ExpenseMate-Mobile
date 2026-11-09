@@ -145,6 +145,7 @@ export interface UserProfile {
   joinedDate: string;
   transactionsCount: number;
   walletsCount: number;
+  isDarkMode?: boolean;
 }
 
 export interface SystemAuditLog {

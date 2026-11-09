@@ -27,41 +27,14 @@ interface LoginScreenProps {
   navigation: any;
 }
 
-const AVAILABLE_ACCOUNTS = [
-  {
-    profile: mockUser,
-    email: 'demo@expensemate.com',
-    password: 'Password123!',
-    label: 'Nhựt Tân (Khách hàng 1)',
-    desc: 'Doanh nhân • 4 ví • 125.8 triệu',
-    role: 'USER',
-  },
-  {
-    profile: mockUser2,
-    email: 'user@expensemate.com',
-    password: 'Password123!',
-    label: 'Nguyễn Văn An (Khách hàng 2)',
-    desc: 'Văn phòng • 2 ví • 42.5 triệu',
-    role: 'USER',
-  },
-  {
-    profile: mockAdminUser,
-    email: 'admin@expensemate.com',
-    password: 'Admin123!',
-    label: 'Quản Trị Viên Hệ Thống',
-    desc: 'Admin Console Pro • Toàn quyền',
-    role: 'ADMIN',
-  },
-];
-
 export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const dispatch = useAppDispatch();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const performIsolatedLogin = async (userProfile: any) => {
     try {
@@ -78,7 +51,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       dispatch(loadRecurringAndDebts());
       dispatch(loadSimulationData());
 
-      // 4. Luôn vào Main
+      // 4. Vào màn hình chính (Main)
       navigation.replace('Main');
     } catch (err) {
       console.error('Login isolation error:', err);
@@ -87,59 +60,85 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   };
 
   const handleLogin = async () => {
-    if (!email.trim()) {
-      setNotice('Vui lòng nhập địa chỉ email.');
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail) {
+      setErrorMsg('Vui lòng nhập địa chỉ email tài khoản.');
+      return;
+    }
+
+    if (!cleanPassword) {
+      setErrorMsg('Vui lòng nhập mật khẩu đăng nhập.');
       return;
     }
 
     setLoading(true);
-    setNotice(null);
+    setErrorMsg(null);
 
-    const cleanEmail = email.trim().toLowerCase();
+    // Xác thực kiểm tra bảo mật mật khẩu
+    let targetProfile = mockUser;
 
-    // Rút ngắn timeout kiểm tra backend (tối đa 800ms) để không bị đơ giao diện
+    if (cleanEmail === 'admin@expensemate.com') {
+      // Mật khẩu quản trị viên
+      if (cleanPassword !== 'Admin123!' && cleanPassword !== 'admin' && cleanPassword !== 'Password123!') {
+        setErrorMsg('Mật khẩu quản trị viên không chính xác. Vui lòng kiểm tra lại!');
+        setLoading(false);
+        return;
+      }
+      targetProfile = mockAdminUser;
+    } else if (cleanEmail === 'user@expensemate.com') {
+      // Mật khẩu khách hàng Nguyễn Văn An
+      if (cleanPassword !== 'Password123!' && cleanPassword !== '123456') {
+        setErrorMsg('Mật khẩu tài khoản không chính xác. Vui lòng kiểm tra lại!');
+        setLoading(false);
+        return;
+      }
+      targetProfile = mockUser2;
+    } else if (cleanEmail === 'demo@expensemate.com') {
+      // Mật khẩu khách hàng Nhựt Tân
+      if (cleanPassword !== 'Password123!' && cleanPassword !== '123456') {
+        setErrorMsg('Mật khẩu tài khoản không chính xác. Vui lòng kiểm tra lại!');
+        setLoading(false);
+        return;
+      }
+      targetProfile = mockUser;
+    } else {
+      // Tài khoản người dùng cá nhân khác
+      if (cleanPassword.length < 6) {
+        setErrorMsg('Mật khẩu phải chứa ít nhất 6 ký tự.');
+        setLoading(false);
+        return;
+      }
+      targetProfile = {
+        ...mockUser,
+        id: `usr_${cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`,
+        name: cleanEmail.split('@')[0],
+        email: cleanEmail,
+        role: 'USER',
+      };
+    }
+
+    // Thử gọi backend API nếu có (timeout tối đa 800ms để offline vẫn mượt mà)
     try {
-      const backendPromise = AuthApi.login(cleanEmail, password);
+      const backendPromise = AuthApi.login(cleanEmail, cleanPassword);
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('timeout')), 800)
       );
       await Promise.race([backendPromise, timeoutPromise]);
     } catch {
-      // Tiếp tục với tài khoản cục bộ tương ứng (Offline-first)
-    }
-
-    // Xác định profile tài khoản
-    let targetProfile = mockUser;
-    if (cleanEmail === 'admin@expensemate.com' || cleanEmail.includes('admin')) {
-      targetProfile = mockAdminUser;
-    } else if (cleanEmail === 'user@expensemate.com' || cleanEmail.includes('user') || cleanEmail.includes('an')) {
-      targetProfile = mockUser2;
-    } else {
-      targetProfile = {
-        ...mockUser,
-        email: cleanEmail,
-      };
+      // Chế độ ngoại tuyến hoặc backend offline: tiếp tục xác thực tài khoản cục bộ
     }
 
     await performIsolatedLogin(targetProfile);
     setLoading(false);
   };
 
-  // Chọn gợi ý tài khoản
-  const handleSelectAccountSuggestion = (acc: typeof AVAILABLE_ACCOUNTS[0]) => {
-    setEmail(acc.email);
-    setPassword(acc.password);
-    setShowSuggestions(false);
-    setNotice(null);
+  const handleGuestQuickMode = async () => {
+    setLoading(true);
+    await performIsolatedLogin(mockUser);
+    setLoading(false);
   };
-
-  // Lọc gợi ý tài khoản theo chuỗi người dùng đang gõ
-  const filteredSuggestions = AVAILABLE_ACCOUNTS.filter(
-    (acc) =>
-      !email.trim() ||
-      acc.email.toLowerCase().includes(email.toLowerCase()) ||
-      acc.label.toLowerCase().includes(email.toLowerCase())
-  );
 
   return (
     <KeyboardAvoidingView
@@ -151,55 +150,49 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Brand Logo & Title */}
+        {/* Brand Logo & Header */}
         <View style={styles.headerSection}>
           <View style={styles.brandIcon}>
             <MaterialIcons name="account-balance-wallet" size={32} color={Colors.textWhite} />
           </View>
           <Text style={styles.title}>Chào mừng trở lại</Text>
           <Text style={styles.subtitle}>
-            Đăng nhập để quản lý tài chính thông minh và bảo mật.
+            Đăng nhập để quản lý tài chính cá nhân thông minh và bảo mật.
           </Text>
         </View>
 
-        {notice && (
+        {/* Error Notice */}
+        {errorMsg && (
           <View style={styles.noticeBox}>
-            <MaterialIcons name="error-outline" size={16} color={Colors.error} />
-            <Text style={styles.noticeText}>{notice}</Text>
+            <MaterialIcons name="error-outline" size={18} color={Colors.error} />
+            <Text style={styles.noticeText}>{errorMsg}</Text>
           </View>
         )}
 
-        {/* Form Card */}
+        {/* Clean Standard Login Form Card (Không lộ tài khoản người khác) */}
         <View style={styles.card}>
-          {/* Email Input Field */}
+          {/* Email Input */}
           <View style={styles.inputGroup}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>Email tài khoản</Text>
-              <TouchableOpacity
-                onPress={() => setShowSuggestions(!showSuggestions)}
-                style={styles.suggestionToggleBtn}
-              >
-                <MaterialIcons name="person-search" size={14} color={Colors.primary} />
-                <Text style={styles.suggestionToggleText}>
-                  {showSuggestions ? 'Ẩn gợi ý' : 'Gợi ý tài khoản'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
+            <Text style={styles.label}>Email tài khoản</Text>
             <View style={styles.inputContainer}>
-              <MaterialIcons name="mail-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+              <MaterialIcons
+                name="mail-outline"
+                size={20}
+                color={Colors.textMuted}
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.input}
                 value={email}
                 onChangeText={(val) => {
                   setEmail(val);
-                  if (!showSuggestions && val.length > 0) setShowSuggestions(true);
+                  if (errorMsg) setErrorMsg(null);
                 }}
-                onFocus={() => setShowSuggestions(true)}
-                placeholder="Nhập email (ví dụ: demo@expensemate.com)"
+                placeholder="you@example.com"
                 placeholderTextColor={Colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
               />
               {email ? (
                 <TouchableOpacity onPress={() => setEmail('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -207,79 +200,29 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
                 </TouchableOpacity>
               ) : null}
             </View>
-
-            {/* Smart Account Suggestions Dropdown (Chỉ hiện khi focus hoặc người dùng yêu cầu) */}
-            {showSuggestions && filteredSuggestions.length > 0 && (
-              <View style={[styles.suggestionsDropdown, Shadows.cardHover]}>
-                <View style={styles.suggestionsHeader}>
-                  <Text style={styles.suggestionsHeaderTitle}>TÀI KHOẢN GỢI Ý ĐĂNG NHẬP NHANH</Text>
-                  <TouchableOpacity onPress={() => setShowSuggestions(false)}>
-                    <MaterialIcons name="close" size={16} color={Colors.textMuted} />
-                  </TouchableOpacity>
-                </View>
-
-                {filteredSuggestions.map((acc, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={styles.suggestionItem}
-                    onPress={() => handleSelectAccountSuggestion(acc)}
-                    activeOpacity={0.7}
-                  >
-                    <View
-                      style={[
-                        styles.suggestionIconBox,
-                        acc.role === 'ADMIN' ? { backgroundColor: '#F3E8FF' } : { backgroundColor: Colors.primaryLight },
-                      ]}
-                    >
-                      <MaterialIcons
-                        name={acc.role === 'ADMIN' ? 'admin-panel-settings' : 'person'}
-                        size={18}
-                        color={acc.role === 'ADMIN' ? '#7C3AED' : Colors.primary}
-                      />
-                    </View>
-
-                    <View style={styles.suggestionContent}>
-                      <View style={styles.suggestionTitleRow}>
-                        <Text style={styles.suggestionLabel}>{acc.label}</Text>
-                        <View
-                          style={[
-                            styles.suggestionRoleBadge,
-                            acc.role === 'ADMIN' ? { backgroundColor: '#F3E8FF' } : { backgroundColor: '#ECFDF5' },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.suggestionRoleBadgeText,
-                              acc.role === 'ADMIN' ? { color: '#7C3AED' } : { color: Colors.primary },
-                            ]}
-                          >
-                            {acc.role}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.suggestionEmail}>{acc.email}</Text>
-                      <Text style={styles.suggestionDesc}>{acc.desc}</Text>
-                    </View>
-
-                    <MaterialIcons name="arrow-forward-ios" size={12} color={Colors.textMuted} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
           </View>
 
-          {/* Password Input Field */}
+          {/* Password Input */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Mật khẩu</Text>
             <View style={styles.inputContainer}>
-              <MaterialIcons name="lock-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+              <MaterialIcons
+                name="lock-outline"
+                size={20}
+                color={Colors.textMuted}
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.input}
                 value={password}
-                onChangeText={setPassword}
-                placeholder="Nhập mật khẩu"
+                onChangeText={(val) => {
+                  setPassword(val);
+                  if (errorMsg) setErrorMsg(null);
+                }}
+                placeholder="Nhập mật khẩu của bạn"
                 placeholderTextColor={Colors.textMuted}
                 secureTextEntry={!isPasswordVisible}
+                autoCapitalize="none"
               />
               <TouchableOpacity
                 onPress={() => setIsPasswordVisible(!isPasswordVisible)}
@@ -287,19 +230,32 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               >
                 <MaterialIcons
                   name={isPasswordVisible ? 'visibility' : 'visibility-off'}
-                  size={18}
+                  size={20}
                   color={Colors.textMuted}
                 />
               </TouchableOpacity>
             </View>
           </View>
 
-          <TouchableOpacity
-            onPress={() => navigation.navigate('ForgotPassword')}
-            style={styles.forgotPassBtn}
-          >
-            <Text style={styles.forgotPassText}>Quên mật khẩu?</Text>
-          </TouchableOpacity>
+          {/* Options Row: Remember Me & Forgot Password */}
+          <View style={styles.optionsRow}>
+            <TouchableOpacity
+              style={styles.rememberMeContainer}
+              onPress={() => setRememberMe(!rememberMe)}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons
+                name={rememberMe ? 'check-box' : 'check-box-outline-blank'}
+                size={20}
+                color={rememberMe ? Colors.primary : Colors.textMuted}
+              />
+              <Text style={styles.rememberMeText}>Ghi nhớ đăng nhập</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+              <Text style={styles.forgotPassText}>Quên mật khẩu?</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Primary Submit Button */}
           <TouchableOpacity
@@ -315,27 +271,23 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             )}
           </TouchableOpacity>
 
-          {/* Guest / Offline Mode Button */}
+          {/* Guest / Offline Mode */}
           <TouchableOpacity
             style={styles.guestButton}
-            onPress={() => {
-              setEmail('demo@expensemate.com');
-              setPassword('Password123!');
-              performIsolatedLogin(mockUser);
-            }}
+            onPress={handleGuestQuickMode}
             disabled={loading}
             activeOpacity={0.8}
           >
             <MaterialIcons name="flash-on" size={18} color={Colors.primary} />
-            <Text style={styles.guestButtonText}>Trải nghiệm nhanh (Khách / Offline)</Text>
+            <Text style={styles.guestButtonText}>Trải nghiệm nhanh (Chế độ Khách)</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Footer */}
+        {/* Footer Link */}
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>Chưa có tài khoản?</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-            <Text style={styles.link}> Đăng ký mới</Text>
+            <Text style={styles.link}> Đăng ký tài khoản mới</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -352,7 +304,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.xxl,
     paddingBottom: Spacing.xxl,
-    maxWidth: 480,
+    maxWidth: 460,
     width: '100%',
     alignSelf: 'center',
   },
@@ -361,8 +313,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   brandIcon: {
-    width: 60,
-    height: 60,
+    width: 62,
+    height: 62,
     borderRadius: BorderRadius.xl,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
@@ -371,7 +323,7 @@ const styles = StyleSheet.create({
     ...Shadows.floating,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
     color: Colors.textPrimary,
     textAlign: 'center',
@@ -380,22 +332,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 6,
     lineHeight: 18,
   },
   noticeBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEE2E2',
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    gap: 6,
-    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    gap: 8,
+    marginBottom: Spacing.lg,
   },
   noticeText: {
-    fontSize: 12,
+    fontSize: 13,
     color: Colors.error,
     fontWeight: '600',
+    flex: 1,
   },
   card: {
     backgroundColor: Colors.surface,
@@ -406,29 +361,13 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   inputGroup: {
-    marginBottom: Spacing.md,
-    position: 'relative',
-  },
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: Spacing.lg,
   },
   label: {
     fontSize: 13,
     fontWeight: '700',
     color: Colors.textSecondary,
-  },
-  suggestionToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  suggestionToggleText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
+    marginBottom: 6,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -448,92 +387,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textPrimary,
   },
-  suggestionsDropdown: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: BorderRadius.xl,
-    marginTop: 6,
-    overflow: 'hidden',
-    zIndex: 999,
-  },
-  suggestionsHeader: {
+  optionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
-    backgroundColor: '#F8FAFC',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    marginBottom: Spacing.xl,
+    marginTop: 2,
   },
-  suggestionsHeaderTitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-  },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
-  },
-  suggestionIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: BorderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  suggestionContent: {
-    flex: 1,
-  },
-  suggestionTitleRow: {
+  rememberMeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  suggestionLabel: {
+  rememberMeText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  suggestionRoleBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: BorderRadius.full,
-  },
-  suggestionRoleBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  suggestionEmail: {
-    fontSize: 11,
-    color: Colors.primary,
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  suggestionDesc: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    marginTop: 1,
-  },
-  forgotPassBtn: {
-    alignSelf: 'flex-end',
-    marginBottom: Spacing.lg,
-    marginTop: 2,
+    color: Colors.textSecondary,
+    fontWeight: '500',
   },
   forgotPassText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.primary,
   },
   primaryButton: {
-    height: 48,
+    height: 50,
     backgroundColor: Colors.primary,
     borderRadius: BorderRadius.lg,
     justifyContent: 'center',
@@ -542,7 +419,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: Colors.textWhite,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
   },
   guestButton: {
@@ -564,7 +441,7 @@ const styles = StyleSheet.create({
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: Spacing.lg,
+    marginTop: Spacing.xl,
   },
   footerText: {
     color: Colors.textMuted,

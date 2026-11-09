@@ -6,6 +6,8 @@ import {
   transferBetweenWallets,
   fetchAllJars,
   updateJarAllocation,
+  updateAllJarsAllocation,
+  setWalletExactBalance,
 } from '../../services/database';
 import { initialWallets, initialJars } from '../../data/mockData';
 import { FinanceApi } from '../../api/financeApi';
@@ -99,6 +101,41 @@ export const updateJarAllocationAsync = createAsyncThunk(
   }
 );
 
+export const updateAllJarsAsync = createAsyncThunk(
+  'wallet/updateAllJars',
+  async (updatedJars: JarEnvelope[]) => {
+    await updateAllJarsAllocation(updatedJars);
+    if (getApiAccessToken()) {
+      try {
+        await Promise.all(
+          updatedJars.map((j) => FinanceApi.updateJar(j.code, j.percentage, j.allocatedAmount))
+        );
+      } catch {
+        /* Local-first offline fallback. */
+      }
+    }
+    return updatedJars;
+  }
+);
+
+export const setWalletExactBalanceAsync = createAsyncThunk(
+  'wallet/setWalletExactBalance',
+  async ({
+    walletId,
+    newBalance,
+    note,
+    recordAdjustment,
+  }: {
+    walletId: string;
+    newBalance: number;
+    note?: string;
+    recordAdjustment?: boolean;
+  }) => {
+    await setWalletExactBalance(walletId, newBalance, note, recordAdjustment ?? true);
+    return { walletId, newBalance };
+  }
+);
+
 export const walletSlice = createSlice({
   name: 'wallet',
   initialState,
@@ -110,6 +147,21 @@ export const walletSlice = createSlice({
       const wallet = state.wallets.find((w) => w.id === action.payload.walletId);
       if (wallet) {
         wallet.balance += action.payload.amountDelta;
+      }
+    },
+    setJars: (state, action: PayloadAction<JarEnvelope[]>) => {
+      state.jars = action.payload;
+    },
+    updateSingleJarLimit: (
+      state,
+      action: PayloadAction<{ code: string; allocatedAmount: number; percentage?: number }>
+    ) => {
+      const jar = state.jars.find((j) => j.code === action.payload.code);
+      if (jar) {
+        jar.allocatedAmount = action.payload.allocatedAmount;
+        if (action.payload.percentage !== undefined) {
+          jar.percentage = action.payload.percentage;
+        }
       }
     },
   },
@@ -131,9 +183,24 @@ export const walletSlice = createSlice({
           jar.percentage = action.payload.percentage;
           jar.allocatedAmount = action.payload.allocated;
         }
+      })
+      .addCase(updateAllJarsAsync.fulfilled, (state, action) => {
+        state.jars = action.payload;
+      })
+      .addCase(setWalletExactBalanceAsync.fulfilled, (state, action) => {
+        const wallet = state.wallets.find((w) => w.id === action.payload.walletId);
+        if (wallet) {
+          wallet.balance = action.payload.newBalance;
+        }
       });
   },
 });
 
-export const { setSelectedWalletId, updateLocalBalance } = walletSlice.actions;
+export const {
+  setSelectedWalletId,
+  updateLocalBalance,
+  setJars,
+  updateSingleJarLimit,
+} = walletSlice.actions;
+
 export default walletSlice.reducer;

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,13 +23,33 @@ interface BudgetScreenProps {
 export const BudgetScreen: React.FC<BudgetScreenProps> = ({ navigation }) => {
   const dispatch = useAppDispatch();
   const { budgets, totalAllocated } = useAppSelector((state) => state.budget);
-  const { monthlyExpense } = useAppSelector((state) => state.expense);
+  const { transactions, monthlyExpense } = useAppSelector((state) => state.expense);
   const { jars } = useAppSelector((state) => state.wallet);
 
   useEffect(() => {
     dispatch(loadBudgets());
     dispatch(loadWalletsAndJars());
   }, [dispatch]);
+
+  // TÍNH TOÁN REALTIME CHO 6 HŨ TỪ TRANSACTIONS
+  const realtimeJars = useMemo(() => {
+    return jars.map((jar) => {
+      const txSpent = transactions
+        .filter(
+          (t) =>
+            t.type === 'EXPENSE' &&
+            (t.jarCode === jar.code || t.category?.jarCode === jar.code)
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const effectiveSpent = txSpent > 0 ? txSpent : jar.spentAmount;
+
+      return {
+        ...jar,
+        spentAmount: effectiveSpent,
+      };
+    });
+  }, [jars, transactions]);
 
   const percentage = Math.min(Math.round((monthlyExpense / totalAllocated) * 100), 100);
   const remaining = totalAllocated - monthlyExpense;
@@ -171,7 +191,7 @@ export const BudgetScreen: React.FC<BudgetScreenProps> = ({ navigation }) => {
         </Text>
 
         <View style={styles.budgetList}>
-          {jars.map((jar, index) => {
+          {realtimeJars.map((jar, index) => {
             const jarPercent = Math.min(Math.round((jar.spentAmount / jar.allocatedAmount) * 100), 100);
             const isNearLimit = jarPercent >= 80;
             const jarVietnameseTitle = getJarName(jar.code);

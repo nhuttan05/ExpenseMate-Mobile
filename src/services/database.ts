@@ -462,12 +462,99 @@ export const insertWallet = async (wallet: Wallet): Promise<void> => {
 export const updateWalletBalance = async (walletId: string, deltaAmount: number): Promise<void> => {
   await initDatabase();
   memoryWallets = memoryWallets.map((w) => (w.id === walletId ? { ...w, balance: w.balance + deltaAmount } : w));
+  if (accountStores[currentActiveUserId]) {
+    accountStores[currentActiveUserId].wallets = accountStores[currentActiveUserId].wallets.map((w) =>
+      w.id === walletId ? { ...w, balance: w.balance + deltaAmount } : w
+    );
+  }
   if (!db || Platform.OS === 'web') return;
   try {
     await db.runAsync('UPDATE wallets SET balance = balance + ? WHERE id = ?', [deltaAmount, walletId]);
   } catch (err) {
     console.error('Update wallet balance failed:', err);
   }
+};
+
+export const setWalletExactBalance = async (
+  walletId: string,
+  newBalance: number,
+  note?: string,
+  recordAdjustmentTransaction: boolean = true
+): Promise<Transaction | null> => {
+  await initDatabase();
+  const targetWallet = memoryWallets.find((w) => w.id === walletId);
+  const oldBalance = targetWallet ? targetWallet.balance : 0;
+  const delta = newBalance - oldBalance;
+
+  memoryWallets = memoryWallets.map((w) => (w.id === walletId ? { ...w, balance: newBalance } : w));
+
+  if (accountStores[currentActiveUserId]) {
+    accountStores[currentActiveUserId].wallets = accountStores[currentActiveUserId].wallets.map((w) =>
+      w.id === walletId ? { ...w, balance: newBalance } : w
+    );
+  }
+
+  let adjustmentTx: Transaction | null = null;
+  if (recordAdjustmentTransaction && delta !== 0 && targetWallet) {
+    const isIncrease = delta > 0;
+    adjustmentTx = {
+      id: `tx_adj_${Date.now()}`,
+      title: note?.trim() || `Điều chỉnh số dư ${targetWallet.name}`,
+      amount: Math.abs(delta),
+      type: isIncrease ? 'INCOME' : 'EXPENSE',
+      category: {
+        id: isIncrease ? 'cat_adj_inc' : 'cat_adj_exp',
+        name: isIncrease ? 'Điều chỉnh tăng số dư' : 'Điều chỉnh giảm số dư',
+        icon: 'tune',
+        color: isIncrease ? '#10B981' : '#EF4444',
+        backgroundColor: isIncrease ? '#ECFDF5' : '#FEF2F2',
+        type: isIncrease ? 'INCOME' : 'EXPENSE',
+      },
+      date: new Date().toISOString().split('T')[0],
+      formattedTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      paymentMethod: targetWallet.name,
+      walletId: targetWallet.id,
+      note: `Số dư cũ: ${oldBalance.toLocaleString('vi-VN')} đ → Số dư mới: ${newBalance.toLocaleString('vi-VN')} đ`,
+    };
+
+    memoryTransactions.unshift(adjustmentTx);
+    if (accountStores[currentActiveUserId]) {
+      accountStores[currentActiveUserId].transactions.unshift(adjustmentTx);
+    }
+  }
+
+  if (!db || Platform.OS === 'web') return adjustmentTx;
+
+  try {
+    await db.runAsync('UPDATE wallets SET balance = ? WHERE id = ?', [newBalance, walletId]);
+    if (adjustmentTx) {
+      await db.runAsync(
+        `INSERT INTO transactions (id, title, amount, type, categoryId, categoryName, categoryIcon, categoryColor, categoryBg, date, formattedTime, paymentMethod, walletId, jarCode, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          adjustmentTx.id,
+          adjustmentTx.title,
+          adjustmentTx.amount,
+          adjustmentTx.type,
+          adjustmentTx.category.id,
+          adjustmentTx.category.name,
+          adjustmentTx.category.icon,
+          adjustmentTx.category.color,
+          adjustmentTx.category.backgroundColor,
+          adjustmentTx.date,
+          adjustmentTx.formattedTime || null,
+          adjustmentTx.paymentMethod,
+          adjustmentTx.walletId || null,
+          adjustmentTx.jarCode || null,
+          adjustmentTx.note || null,
+        ]
+      );
+    }
+  } catch (err) {
+    console.error('Set exact wallet balance failed:', err);
+  }
+
+  return adjustmentTx;
 };
 
 export const transferBetweenWallets = async (
@@ -535,11 +622,37 @@ export const fetchAllJars = async (): Promise<JarEnvelope[]> => {
 export const updateJarAllocation = async (code: string, newPercentage: number, newAllocated: number): Promise<void> => {
   await initDatabase();
   memoryJars = memoryJars.map((j) => (j.code === code ? { ...j, percentage: newPercentage, allocatedAmount: newAllocated } : j));
+  if (accountStores[currentActiveUserId]) {
+    accountStores[currentActiveUserId].jars = accountStores[currentActiveUserId].jars.map((j) =>
+      j.code === code ? { ...j, percentage: newPercentage, allocatedAmount: newAllocated } : j
+    );
+  }
   if (!db || Platform.OS === 'web') return;
   try {
     await db.runAsync('UPDATE jars SET percentage = ?, allocatedAmount = ? WHERE code = ?', [newPercentage, newAllocated, code]);
   } catch (err) {
     console.error('Update jar failed:', err);
+  }
+};
+
+export const updateAllJarsAllocation = async (updatedJars: JarEnvelope[]): Promise<void> => {
+  await initDatabase();
+  memoryJars = updatedJars.map((j) => ({ ...j }));
+  if (accountStores[currentActiveUserId]) {
+    accountStores[currentActiveUserId].jars = updatedJars.map((j) => ({ ...j }));
+  }
+  if (!db || Platform.OS === 'web') return;
+  try {
+    for (const j of updatedJars) {
+      await db.runAsync('UPDATE jars SET percentage = ?, allocatedAmount = ?, spentAmount = ? WHERE code = ?', [
+        j.percentage,
+        j.allocatedAmount,
+        j.spentAmount,
+        j.code,
+      ]);
+    }
+  } catch (err) {
+    console.error('Update all jars failed:', err);
   }
 };
 
@@ -988,7 +1101,45 @@ export const getActiveUserId = (): string => currentActiveUserId;
 export const switchActiveAccountDatabase = async (userId: string): Promise<boolean> => {
   await initDatabase();
   currentActiveUserId = userId;
-  const store = accountStores[userId] || accountStores['usr_001'];
+
+  if (!accountStores[userId]) {
+    accountStores[userId] = {
+      user: {
+        id: userId,
+        name: 'Khách Hàng Mới',
+        email: `${userId}@expensemate.com`,
+        role: 'USER',
+        tier: 'Người Dùng Mới',
+        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250',
+        totalBalance: 0,
+        monthlyIncome: 20000000,
+        monthlyExpense: 10000000,
+        status: 'ACTIVE',
+        joinedDate: new Date().toLocaleDateString('vi-VN'),
+        transactionsCount: 0,
+        walletsCount: 1,
+        isDarkMode: false,
+      },
+      wallets: [
+        {
+          id: `w_${userId}_cash`,
+          name: 'Ví Tiền Mặt Trong Túi',
+          type: 'CASH',
+          balance: 0,
+          currency: 'VND',
+          icon: 'payments',
+          color: '#10B981',
+          backgroundColor: '#ECFDF5',
+          accountNumber: 'Ví chính',
+        },
+      ],
+      transactions: [],
+      budgets: [],
+      jars: initialJars.map((j) => ({ ...j, allocatedAmount: 0, spentAmount: 0 })),
+    };
+  }
+
+  const store = accountStores[userId];
 
   memoryTransactions = store.transactions.map((t) => ({ ...t }));
   memoryWallets = store.wallets.map((w) => ({ ...w }));

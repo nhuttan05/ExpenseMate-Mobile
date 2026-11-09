@@ -1,6 +1,32 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { UserProfile, UserRole, UserAccountStatus, SystemAuditLog } from '../../types';
-import { mockUser, initialSystemUsers, initialAuditLogs } from '../../data/mockData';
+import { mockUser, initialSystemUsers, initialAuditLogs, accountStores } from '../../data/mockData';
+
+const DARK_STORAGE_KEY_PREFIX = 'expensemate_darkmode_';
+
+export const getSavedDarkModeForAccount = (userId: string, defaultVal: boolean = false): boolean => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const val = window.localStorage.getItem(DARK_STORAGE_KEY_PREFIX + userId);
+      if (val !== null) return val === 'true';
+    }
+  } catch {}
+  if (accountStores[userId]?.user?.isDarkMode !== undefined) {
+    return !!accountStores[userId].user.isDarkMode;
+  }
+  return defaultVal;
+};
+
+export const persistDarkModeForAccount = (userId: string, isDark: boolean): void => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(DARK_STORAGE_KEY_PREFIX + userId, isDark ? 'true' : 'false');
+    }
+  } catch {}
+  if (accountStores[userId]) {
+    accountStores[userId].user.isDarkMode = isDark;
+  }
+};
 
 interface AuthState {
   currentUser: UserProfile;
@@ -11,13 +37,15 @@ interface AuthState {
   isDarkMode: boolean;
 }
 
+const initialDark = getSavedDarkModeForAccount(mockUser.id, mockUser.isDarkMode ?? false);
+
 const initialState: AuthState = {
-  currentUser: mockUser,
+  currentUser: { ...mockUser, isDarkMode: initialDark },
   isAuthenticated: true,
   activeViewMode: mockUser.role,
   usersList: initialSystemUsers,
   auditLogs: initialAuditLogs,
-  isDarkMode: false,
+  isDarkMode: initialDark,
 };
 
 export const authSlice = createSlice({
@@ -25,9 +53,18 @@ export const authSlice = createSlice({
   initialState,
   reducers: {
     setCurrentUser: (state, action: PayloadAction<UserProfile>) => {
-      state.currentUser = action.payload;
+      // Khôi phục chính xác chế độ Sáng/Tối đã lưu của riêng account này
+      const userDark = getSavedDarkModeForAccount(
+        action.payload.id,
+        action.payload.isDarkMode ?? false
+      );
+      state.currentUser = {
+        ...action.payload,
+        isDarkMode: userDark,
+      };
       state.isAuthenticated = true;
       state.activeViewMode = action.payload.role;
+      state.isDarkMode = userDark;
     },
     updateCurrentUserProfile: (
       state,
@@ -47,10 +84,44 @@ export const authSlice = createSlice({
       }
     },
     toggleDarkMode: (state) => {
-      state.isDarkMode = !state.isDarkMode;
+      const nextMode = !state.isDarkMode;
+      state.isDarkMode = nextMode;
+      state.currentUser.isDarkMode = nextMode;
+      persistDarkModeForAccount(state.currentUser.id, nextMode);
+
+      const idx = state.usersList.findIndex((u) => u.id === state.currentUser.id);
+      if (idx !== -1) {
+        state.usersList[idx].isDarkMode = nextMode;
+      }
     },
     setDarkMode: (state, action: PayloadAction<boolean>) => {
       state.isDarkMode = action.payload;
+      state.currentUser.isDarkMode = action.payload;
+      persistDarkModeForAccount(state.currentUser.id, action.payload);
+
+      const idx = state.usersList.findIndex((u) => u.id === state.currentUser.id);
+      if (idx !== -1) {
+        state.usersList[idx].isDarkMode = action.payload;
+      }
+    },
+    registerNewUser: (state, action: PayloadAction<UserProfile>) => {
+      const newUser = action.payload;
+      state.usersList.unshift(newUser);
+      state.currentUser = newUser;
+      state.isAuthenticated = true;
+      state.activeViewMode = newUser.role;
+      state.isDarkMode = newUser.isDarkMode ?? false;
+      persistDarkModeForAccount(newUser.id, state.isDarkMode);
+
+      state.auditLogs.unshift({
+        id: `log_${Date.now()}`,
+        timestamp: new Date().toLocaleString('vi-VN'),
+        actorEmail: newUser.email,
+        action: `Đăng ký tài khoản mới: ${newUser.name} (${newUser.email})`,
+        category: 'AUTH',
+        status: 'SUCCESS',
+        details: `Tạo tài khoản và cô lập dữ liệu cá nhân thành công`,
+      });
     },
     switchViewMode: (state, action: PayloadAction<'USER' | 'ADMIN'>) => {
       // Chỉ Admin mới được phép đổi view mode
@@ -111,6 +182,7 @@ export const {
   updateCurrentUserProfile,
   toggleDarkMode,
   setDarkMode,
+  registerNewUser,
   switchViewMode,
   toggleUserStatus,
   updateUserRole,
