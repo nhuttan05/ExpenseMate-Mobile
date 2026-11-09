@@ -8,6 +8,7 @@ interface AuthState {
   activeViewMode: 'USER' | 'ADMIN';
   usersList: UserProfile[];
   auditLogs: SystemAuditLog[];
+  isDarkMode: boolean;
 }
 
 const initialState: AuthState = {
@@ -16,6 +17,7 @@ const initialState: AuthState = {
   activeViewMode: mockUser.role,
   usersList: initialSystemUsers,
   auditLogs: initialAuditLogs,
+  isDarkMode: false,
 };
 
 export const authSlice = createSlice({
@@ -26,6 +28,29 @@ export const authSlice = createSlice({
       state.currentUser = action.payload;
       state.isAuthenticated = true;
       state.activeViewMode = action.payload.role;
+    },
+    updateCurrentUserProfile: (
+      state,
+      action: PayloadAction<Partial<UserProfile>>
+    ) => {
+      state.currentUser = {
+        ...state.currentUser,
+        ...action.payload,
+      };
+      // Đồng bộ trong danh sách usersList
+      const idx = state.usersList.findIndex((u) => u.id === state.currentUser.id);
+      if (idx !== -1) {
+        state.usersList[idx] = {
+          ...state.usersList[idx],
+          ...action.payload,
+        };
+      }
+    },
+    toggleDarkMode: (state) => {
+      state.isDarkMode = !state.isDarkMode;
+    },
+    setDarkMode: (state, action: PayloadAction<boolean>) => {
+      state.isDarkMode = action.payload;
     },
     switchViewMode: (state, action: PayloadAction<'USER' | 'ADMIN'>) => {
       // Chỉ Admin mới được phép đổi view mode
@@ -83,6 +108,9 @@ export const authSlice = createSlice({
 
 export const {
   setCurrentUser,
+  updateCurrentUserProfile,
+  toggleDarkMode,
+  setDarkMode,
   switchViewMode,
   toggleUserStatus,
   updateUserRole,

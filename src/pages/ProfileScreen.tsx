@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Image,
   Switch,
-  Alert,
   Modal,
   TextInput,
   ScrollView,
@@ -14,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors, Spacing, BorderRadius, Shadows } from '../constants/theme';
+import { Colors, DarkColors, Spacing, BorderRadius, Shadows } from '../constants/theme';
 import { useAppDispatch, useAppSelector } from '../redux/store';
 import { ApiService } from '../services/apiService';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
@@ -26,6 +25,11 @@ import {
   restoreDataSnapshot,
   DatabaseSnapshot,
 } from '../services/database';
+import {
+  logout,
+  updateCurrentUserProfile,
+  toggleDarkMode,
+} from '../redux/slices/authSlice';
 import { loadTransactions } from '../redux/slices/expenseSlice';
 import { loadBudgets } from '../redux/slices/budgetSlice';
 import { loadWalletsAndJars } from '../redux/slices/walletSlice';
@@ -44,13 +48,23 @@ const AVATAR_OPTIONS = [
   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80',
 ];
 
+const TIER_OPTIONS = [
+  'Bậc Thầy Tài Chính',
+  'Người Tích Luỹ Mới',
+  'Doanh Nhân Khởi Nghiệp',
+  'Nhà Đầu Tư Thông Thái',
+];
+
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const dispatch = useAppDispatch();
   const { transactions } = useAppSelector((state) => state.expense);
   const { wallets } = useAppSelector((state) => state.wallet);
-  const { currentUser } = useAppSelector((state) => state.auth);
+  const { currentUser, isDarkMode } = useAppSelector((state) => state.auth);
 
-  // User State synced with active account
+  // Chọn Theme theo chế độ Đen Trắng / Dark Mode
+  const theme = isDarkMode ? DarkColors : Colors;
+
+  // User State
   const [user, setUser] = useState({
     name: currentUser?.name || initialUser.name,
     email: currentUser?.email || initialUser.email,
@@ -58,6 +72,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     avatarUrl: currentUser?.avatarUrl || initialUser.avatarUrl,
     tier: currentUser?.tier || initialUser.tier,
     role: currentUser?.role || 'USER',
+    monthlyIncome: currentUser?.monthlyIncome || 35000000,
+    monthlyExpense: currentUser?.monthlyExpense || 18200000,
   });
 
   useEffect(() => {
@@ -69,6 +85,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         avatarUrl: currentUser.avatarUrl,
         tier: currentUser.tier,
         role: currentUser.role,
+        monthlyIncome: currentUser.monthlyIncome,
+        monthlyExpense: currentUser.monthlyExpense,
       });
     }
   }, [currentUser]);
@@ -76,12 +94,18 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   // Security & App Settings
   const [biometricsEnabled, setBiometricsEnabled] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [userPin, setUserPin] = useState('1234');
   const [selectedCurrency, setSelectedCurrency] = useState<'VND' | 'USD' | 'EUR' | 'JPY'>('VND');
 
   // Async States
   const [isSyncing, setIsSyncing] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
   const [serverStatus, setServerStatus] = useState<{
     tested: boolean;
     online: boolean;
@@ -105,12 +129,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const [serverModalVisible, setServerModalVisible] = useState(false);
   const [faqModalVisible, setFaqModalVisible] = useState(false);
   const [resetModalVisible, setResetModalVisible] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   // Edit Profile Form State
   const [editName, setEditName] = useState(user.name);
   const [editEmail, setEditEmail] = useState(user.email);
   const [editPhone, setEditPhone] = useState(user.phone);
   const [editAvatar, setEditAvatar] = useState(user.avatarUrl);
+  const [editTier, setEditTier] = useState(user.tier);
+  const [editIncome, setEditIncome] = useState(user.monthlyIncome.toString());
+  const [editExpense, setEditExpense] = useState(user.monthlyExpense.toString());
 
   // PIN Keypad State
   const [pinInput, setPinInput] = useState('');
@@ -133,21 +161,47 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   // HANDLERS
   // ==========================================
 
-  // 1. Chỉnh sửa hồ sơ
+  // 1. Chỉnh sửa thông tin khách hàng hợp lý
+  const handleOpenEditModal = () => {
+    setEditName(user.name);
+    setEditEmail(user.email);
+    setEditPhone(user.phone);
+    setEditAvatar(user.avatarUrl);
+    setEditTier(user.tier);
+    setEditIncome(user.monthlyIncome.toString());
+    setEditExpense(user.monthlyExpense.toString());
+    setEditProfileVisible(true);
+  };
+
   const handleSaveProfile = () => {
     if (!editName.trim() || !editEmail.trim()) {
-      Alert.alert('Lỗi nhập liệu', 'Họ tên và email không được để trống.');
+      showToast('⚠️ Họ tên và email không được để trống.');
       return;
     }
-    setUser({
-      ...user,
+
+    const incomeNum = parseFloat(editIncome) || user.monthlyIncome;
+    const expenseNum = parseFloat(editExpense) || user.monthlyExpense;
+
+    const updatedProfile = {
       name: editName.trim(),
       email: editEmail.trim(),
-      phone: editPhone.trim(),
       avatarUrl: editAvatar,
-    });
+      tier: editTier,
+      monthlyIncome: incomeNum,
+      monthlyExpense: expenseNum,
+    };
+
+    // Cập nhật Redux store (đồng bộ sang toàn bộ app)
+    dispatch(updateCurrentUserProfile(updatedProfile));
+
+    setUser((prev) => ({
+      ...prev,
+      ...updatedProfile,
+      phone: editPhone.trim(),
+    }));
+
     setEditProfileVisible(false);
-    Alert.alert('Thành công', 'Thông tin cá nhân đã được lưu cập nhật.');
+    showToast('✅ Đã cập nhật thông tin khách hàng thành công!');
   };
 
   // 2. Mã PIN bảo mật
@@ -178,7 +232,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             setPinInput('');
             setPinStep('ENTER_OLD');
             setSecurityModalVisible(false);
-            Alert.alert('Đổi mã PIN thành công', 'Mã PIN bảo mật mới đã được áp dụng.');
+            showToast('✅ Đổi mã PIN bảo mật thành công!');
           } else {
             setPinInput('');
             setPinStep('ENTER_NEW');
@@ -225,12 +279,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     const csv = generateCSVContent();
     if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(csv);
-      Alert.alert('Đã sao chép CSV', `Đã sao chép ${transactions.length} dòng dữ liệu vào bộ nhớ tạm.`);
+      showToast(`📋 Đã sao chép ${transactions.length} dòng dữ liệu CSV!`);
     } else {
-      Alert.alert(
-        'Đã tạo bảng CSV',
-        `Đã tạo cấu trúc CSV gồm ${transactions.length} giao dịch thành công. Bạn có thể xem trước bên dưới.`
-      );
+      showToast(`📋 Đã tạo ${transactions.length} dòng dữ liệu CSV thành công!`);
     }
   };
 
@@ -238,15 +289,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const handleCreateBackup = async () => {
     const snapshot = await exportAllDataSnapshot();
     setSavedSnapshot(snapshot);
-    Alert.alert(
-      'Sao lưu thành công',
-      `Bản snapshot gồm ${snapshot.transactions.length} giao dịch, ${snapshot.wallets.length} ví, ${snapshot.jars.length} hũ đã được lưu trữ an toàn.`
-    );
+    showToast(`💾 Đã sao lưu an toàn ${snapshot.transactions.length} giao dịch!`);
   };
 
   const handleRestoreBackup = async () => {
     if (!savedSnapshot) {
-      Alert.alert('Chưa có bản sao lưu', 'Vui lòng tạo bản sao lưu trước khi khôi phục.');
+      showToast('⚠️ Chưa có bản sao lưu nào để khôi phục.');
       return;
     }
     const success = await restoreDataSnapshot(savedSnapshot);
@@ -255,9 +303,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       dispatch(loadWalletsAndJars());
       dispatch(loadBudgets());
       setBackupModalVisible(false);
-      Alert.alert('Khôi phục hoàn tất', 'Dữ liệu đã được phục hồi chính xác từ bản sao lưu gần nhất.');
+      showToast('✅ Đã khôi phục dữ liệu từ bản sao lưu thành công!');
     } else {
-      Alert.alert('Khôi phục thất bại', 'Không thể khôi phục dữ liệu lúc này.');
+      showToast('❌ Khôi phục dữ liệu thất bại.');
     }
   };
 
@@ -291,15 +339,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   // 7. Đồng bộ đám mây
   const handleSyncCloud = async () => {
     if (!AuthApi.getAccessToken()) {
-      Alert.alert('Chế độ Offline / Thiết bị', 'Dữ liệu đang được lưu hoàn toàn trên SQLite cục bộ. Đăng nhập để kích hoạt đồng bộ đám mây.');
+      showToast('ℹ️ Chế độ thiết bị: Dữ liệu đang được lưu an toàn trong SQLite.');
       return;
     }
     setIsSyncing(true);
     try {
       const res = await ApiService.syncLocalToCloud(transactions);
-      Alert.alert('Đồng bộ thành công', `Đã đồng bộ ${res.count} giao dịch lên máy chủ an toàn.`);
+      showToast(`☁️ Đã đồng bộ ${res.count} giao dịch lên máy chủ!`);
     } catch (error: any) {
-      Alert.alert('Thông báo đồng bộ', error?.response?.data?.error?.message || 'Đồng bộ tạm thời gián đoạn. Dữ liệu trên SQLite vẫn nguyên vẹn.');
+      showToast('⚠️ Đồng bộ tạm thời gián đoạn. Dữ liệu trên máy vẫn an toàn.');
     } finally {
       setIsSyncing(false);
     }
@@ -315,97 +363,112 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       dispatch(loadRecurringAndDebts());
       dispatch(loadSimulationData());
       setResetModalVisible(false);
-      Alert.alert('Khôi phục thành công', 'Toàn bộ dữ liệu cơ sở dữ liệu đã được đặt lại về trạng thái mẫu ban đầu.');
+      showToast('✅ Đã khôi phục dữ liệu ban đầu thành công!');
     } else {
-      Alert.alert('Lỗi', 'Không thể đặt lại cơ sở dữ liệu.');
+      showToast('❌ Không thể đặt lại dữ liệu.');
     }
   };
 
-  // 9. Đăng xuất
-  const handleLogout = () => {
-    Alert.alert(
-      'Xác nhận đăng xuất',
-      'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản ExpenseMate? Dữ liệu cục bộ trên máy vẫn được bảo toàn an toàn.',
-      [
-        { text: 'Hủy bỏ', style: 'cancel' },
-        {
-          text: 'Đăng xuất',
-          style: 'destructive',
-          onPress: async () => {
-            await AuthApi.logout();
-            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-          },
-        },
-      ]
-    );
+  // 9. Đăng xuất hoàn chỉnh (Hoạt động 100% trên Web, Android, iOS)
+  const handleConfirmLogout = async () => {
+    setLogoutModalVisible(false);
+    dispatch(logout());
+    await AuthApi.logout();
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
 
   const numAmount = parseFloat(converterAmount) || 0;
 
   return (
-    <ScreenContainer>
+    <ScreenContainer style={{ backgroundColor: theme.background }}>
       {/* HEADER */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Hồ sơ & Cài đặt</Text>
+      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.borderSubtle }]}>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Hồ sơ & Cài đặt</Text>
         <TouchableOpacity
-          style={styles.headerIconBtn}
+          style={[styles.headerIconBtn, { backgroundColor: theme.surfaceContainerLow }]}
           onPress={handleSyncCloud}
           disabled={isSyncing}
           activeOpacity={0.7}
         >
           {isSyncing ? (
-            <ActivityIndicator size="small" color={Colors.primary} />
+            <ActivityIndicator size="small" color={theme.primary} />
           ) : (
-            <MaterialIcons name="cloud-done" size={20} color={Colors.primary} />
+            <MaterialIcons name="cloud-done" size={20} color={theme.primary} />
           )}
         </TouchableOpacity>
       </View>
 
-      <View style={styles.contentPadding}>
-        {/* PROFILE CARD */}
+      {/* FLOATING TOAST NOTIFICATION */}
+      {toastMessage && (
+        <View style={styles.toastContainer}>
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </View>
+      )}
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.contentPadding}>
+        {/* PROFILE CARD (Bấm vào để chỉnh sửa thông tin khách hàng) */}
         <TouchableOpacity
-          style={[styles.profileCard, Shadows.card]}
-          onPress={() => {
-            setEditName(user.name);
-            setEditEmail(user.email);
-            setEditPhone(user.phone);
-            setEditAvatar(user.avatarUrl);
-            setEditProfileVisible(true);
-          }}
+          style={[
+            styles.profileCard,
+            Shadows.card,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+          onPress={handleOpenEditModal}
           activeOpacity={0.88}
         >
           <Image source={{ uri: user.avatarUrl }} style={styles.avatarLarge} />
           <View style={styles.profileDetails}>
             <View style={styles.badgeRow}>
-              <Text style={styles.userName}>{user.name}</Text>
-              <View style={styles.tierBadge}>
-                <MaterialIcons name="verified" size={12} color={Colors.primary} />
-                <Text style={styles.tierText}>{user.tier}</Text>
+              <Text style={[styles.userName, { color: theme.textPrimary }]}>{user.name}</Text>
+              <View style={[styles.tierBadge, { backgroundColor: theme.primaryLight }]}>
+                <MaterialIcons name="verified" size={12} color={theme.primary} />
+                <Text style={[styles.tierText, { color: theme.primary }]}>{user.tier}</Text>
               </View>
             </View>
-            <Text style={styles.userEmail}>{user.email}</Text>
-            <Text style={styles.phoneText}>{user.phone}</Text>
+
+            <View style={styles.roleSubRow}>
+              <View
+                style={[
+                  styles.roleIndicatorPill,
+                  user.role === 'ADMIN' ? styles.roleAdminPill : styles.roleUserPill,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.roleIndicatorText,
+                    user.role === 'ADMIN' ? { color: '#7C3AED' } : { color: theme.primary },
+                  ]}
+                >
+                  {user.role === 'ADMIN' ? 'QUẢN TRỊ VIÊN' : 'KHÁCH HÀNG'}
+                </Text>
+              </View>
+              <Text style={[styles.userEmail, { color: theme.textSecondary }]}>{user.email}</Text>
+            </View>
+
+            <Text style={[styles.phoneText, { color: theme.textMuted }]}>
+              {user.phone} • Thu nhập: {formatCurrency(user.monthlyIncome)}/tháng
+            </Text>
           </View>
-          <View style={styles.editProfileBtn}>
-            <MaterialIcons name="edit" size={18} color={Colors.primary} />
+          <View style={[styles.editProfileBtn, { backgroundColor: theme.surfaceContainerLow }]}>
+            <MaterialIcons name="edit" size={18} color={theme.primary} />
           </View>
         </TouchableOpacity>
 
         {/* BENTO STATS QUICK STRIP */}
-        <View style={styles.statsStrip}>
+        <View style={[styles.statsStrip, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>GIAO DỊCH</Text>
-            <Text style={styles.statNumber}>{transactions.length}</Text>
+            <Text style={[styles.statLabel, { color: theme.textMuted }]}>GIAO DỊCH</Text>
+            <Text style={[styles.statNumber, { color: theme.primary }]}>{transactions.length}</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>VÍ HOẠT ĐỘNG</Text>
-            <Text style={styles.statNumber}>{wallets.length}</Text>
+            <Text style={[styles.statLabel, { color: theme.textMuted }]}>VÍ HOẠT ĐỘNG</Text>
+            <Text style={[styles.statNumber, { color: theme.primary }]}>{wallets.length}</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>TIỀN TỆ</Text>
-            <Text style={styles.statNumber}>{selectedCurrency}</Text>
+            <Text style={[styles.statLabel, { color: theme.textMuted }]}>TIỀN TỆ</Text>
+            <Text style={[styles.statNumber, { color: theme.primary }]}>{selectedCurrency}</Text>
           </View>
         </View>
 
@@ -414,10 +477,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         {/* ======================================================== */}
         {currentUser?.role === 'ADMIN' && (
           <View style={styles.groupWrapper}>
-            <Text style={[styles.groupTitle, { color: '#7C3AED' }]}>ĐẶC QUYỀN QUẢN TRỊ VIÊN</Text>
-            <View style={[styles.menuCard, Shadows.card, { borderColor: '#DDD6FE', borderWidth: 1.5 }]}>
+            <Text style={[styles.groupTitle, { color: '#A855F7' }]}>ĐẶC QUYỀN QUẢN TRỊ VIÊN</Text>
+            <View style={[styles.menuCard, Shadows.card, { backgroundColor: theme.surface, borderColor: '#7C3AED', borderWidth: 1.5 }]}>
               <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#FAF5FF' }]}
+                style={[styles.menuItem, { backgroundColor: isDarkMode ? '#1E1B4B' : '#FAF5FF', borderBottomColor: 'transparent' }]}
                 onPress={() => navigation.navigate('Admin')}
                 activeOpacity={0.8}
               >
@@ -425,8 +488,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                   <MaterialIcons name="admin-panel-settings" size={20} color="#FFF" />
                 </View>
                 <View style={styles.menuContent}>
-                  <Text style={[styles.menuText, { color: '#6D28D9' }]}>Bảng Điều Khiển Quản Trị Hệ Thống</Text>
-                  <Text style={styles.menuSubText}>Quản lý tài khoản, cấu hình 6 Hũ toàn sàn & Audit Logs</Text>
+                  <Text style={[styles.menuText, { color: isDarkMode ? '#C084FC' : '#6D28D9' }]}>
+                    Bảng Điều Khiển Quản Trị Hệ Thống
+                  </Text>
+                  <Text style={[styles.menuSubText, { color: theme.textMuted }]}>
+                    Quản lý khách hàng, cấu hình 6 Hũ toàn sàn & Audit Logs
+                  </Text>
                 </View>
                 <MaterialIcons name="arrow-forward" size={20} color="#7C3AED" />
               </TouchableOpacity>
@@ -436,11 +503,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
         {/* SETTINGS GROUP 1: HỆ THỐNG & KẾT NỐI */}
         <View style={styles.groupWrapper}>
-          <Text style={styles.groupTitle}>HỆ THỐNG & ĐỒNG BỘ DỮ LIỆU</Text>
-          <View style={[styles.menuCard, Shadows.card]}>
+          <Text style={[styles.groupTitle, { color: theme.textMuted }]}>HỆ THỐNG & ĐỒNG BỘ DỮ LIỆU</Text>
+          <View style={[styles.menuCard, Shadows.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             {/* Server Health Status */}
             <TouchableOpacity
-              style={styles.menuItem}
+              style={[styles.menuItem, { borderBottomColor: theme.borderSubtle }]}
               onPress={() => {
                 setServerModalVisible(true);
                 handleTestServerHealth();
@@ -448,70 +515,104 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               activeOpacity={0.7}
             >
               <View style={[styles.iconBox, { backgroundColor: '#EEF2FF' }]}>
-                <MaterialIcons name="dns" size={20} color={Colors.primary} />
+                <MaterialIcons name="dns" size={20} color={theme.primary} />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuText}>Trạng thái Máy chủ & Database</Text>
-                <Text style={styles.menuSubText}>Kiểm tra Docker Container & Postgres 5433</Text>
+                <Text style={[styles.menuText, { color: theme.textPrimary }]}>Trạng thái Máy chủ & Database</Text>
+                <Text style={[styles.menuSubText, { color: theme.textMuted }]}>Kiểm tra Docker Container & Postgres 5433</Text>
               </View>
               <View style={styles.statusDotRow}>
-                <View style={[styles.liveDot, { backgroundColor: Colors.income }]} />
-                <MaterialIcons name="chevron-right" size={20} color={Colors.textMuted} />
+                <View style={[styles.liveDot, { backgroundColor: theme.income }]} />
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </View>
             </TouchableOpacity>
 
             {/* Cloud Sync */}
-            <TouchableOpacity style={styles.menuItem} onPress={handleSyncCloud} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={[styles.menuItem, { borderBottomColor: theme.borderSubtle }]}
+              onPress={handleSyncCloud}
+              activeOpacity={0.7}
+            >
               <View style={[styles.iconBox, { backgroundColor: '#ECFDF5' }]}>
-                <MaterialIcons name="cloud-sync" size={20} color={Colors.secondary} />
+                <MaterialIcons name="cloud-sync" size={20} color={theme.secondary} />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuText}>Đồng bộ tức thì lên Cloud</Text>
-                <Text style={styles.menuSubText}>{transactions.length} giao dịch trong SQLite nội bộ</Text>
+                <Text style={[styles.menuText, { color: theme.textPrimary }]}>Đồng bộ tức thì lên Cloud</Text>
+                <Text style={[styles.menuSubText, { color: theme.textMuted }]}>{transactions.length} giao dịch trong SQLite nội bộ</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color={Colors.textMuted} />
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </TouchableOpacity>
 
             {/* Exchange Rates */}
-            <TouchableOpacity style={styles.menuItem} onPress={handleOpenCurrencyModal} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={[styles.menuItem, { borderBottomColor: 'transparent' }]}
+              onPress={handleOpenCurrencyModal}
+              activeOpacity={0.7}
+            >
               <View style={[styles.iconBox, { backgroundColor: '#FEF3C7' }]}>
                 <MaterialIcons name="currency-exchange" size={20} color="#D97706" />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuText}>Tiền tệ & Tỷ giá hối đoái</Text>
-                <Text style={styles.menuSubText}>Đang dùng {selectedCurrency} • Quy đổi ngoại tệ thông minh</Text>
+                <Text style={[styles.menuText, { color: theme.textPrimary }]}>Tiền tệ & Tỷ giá hối đoái</Text>
+                <Text style={[styles.menuSubText, { color: theme.textMuted }]}>Đang dùng {selectedCurrency} • Quy đổi ngoại tệ thông minh</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color={Colors.textMuted} />
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* SETTINGS GROUP 2: BẢO MẬT & MÃ PIN */}
+        {/* SETTINGS GROUP 2: BẢO MẬT & GIAO DIỆN ĐEN TRẮNG */}
         <View style={styles.groupWrapper}>
-          <Text style={styles.groupTitle}>BẢO MẬT & QUYỀN RIÊNG TƯ</Text>
-          <View style={[styles.menuCard, Shadows.card]}>
-            {/* Biometrics */}
-            <View style={styles.menuItem}>
-              <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
-                <MaterialIcons name="fingerprint" size={20} color={Colors.primary} />
+          <Text style={[styles.groupTitle, { color: theme.textMuted }]}>BẢO MẬT & GIAO DIỆN ĐEN TRẮNG</Text>
+          <View style={[styles.menuCard, Shadows.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            {/* Dark Mode Switch (Chế độ Đen Trắng hiển thị sống động) */}
+            <View style={[styles.menuItem, { borderBottomColor: theme.borderSubtle }]}>
+              <View style={[styles.iconBox, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+                <MaterialIcons
+                  name="dark-mode"
+                  size={20}
+                  color={isDarkMode ? '#38BDF8' : theme.textPrimary}
+                />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuText}>Xác thực FaceID / Vân tay</Text>
-                <Text style={styles.menuSubText}>Bảo mật mở khoá tức thì khi vào app</Text>
+                <Text style={[styles.menuText, { color: theme.textPrimary }]}>
+                  Chế độ Đen Trắng / Dark OLED
+                </Text>
+                <Text style={[styles.menuSubText, { color: theme.textMuted }]}>
+                  {isDarkMode ? 'Đang bật nền đen sâu OLED bảo vệ mắt' : 'Đang dùng giao diện sáng Porcelain'}
+                </Text>
+              </View>
+              <Switch
+                value={isDarkMode}
+                onValueChange={() => {
+                  dispatch(toggleDarkMode());
+                }}
+                trackColor={{ false: Colors.border, true: theme.primary }}
+              />
+            </View>
+
+            {/* Biometrics */}
+            <View style={[styles.menuItem, { borderBottomColor: theme.borderSubtle }]}>
+              <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
+                <MaterialIcons name="fingerprint" size={20} color={theme.primary} />
+              </View>
+              <View style={styles.menuContent}>
+                <Text style={[styles.menuText, { color: theme.textPrimary }]}>Xác thực FaceID / Vân tay</Text>
+                <Text style={[styles.menuSubText, { color: theme.textMuted }]}>Bảo mật mở khoá tức thì khi vào app</Text>
               </View>
               <Switch
                 value={biometricsEnabled}
                 onValueChange={(val) => {
                   setBiometricsEnabled(val);
-                  Alert.alert('Cập nhật bảo mật', val ? 'Đã kích hoạt FaceID/Vân tay.' : 'Đã tắt xác thực sinh trắc học.');
+                  showToast(val ? 'Đã kích hoạt FaceID/Vân tay.' : 'Đã tắt sinh trắc học.');
                 }}
-                trackColor={{ false: Colors.border, true: Colors.primary }}
+                trackColor={{ false: Colors.border, true: theme.primary }}
               />
             </View>
 
             {/* Change PIN */}
             <TouchableOpacity
-              style={styles.menuItem}
+              style={[styles.menuItem, { borderBottomColor: theme.borderSubtle }]}
               onPress={() => {
                 setPinStep('ENTER_OLD');
                 setPinInput('');
@@ -524,41 +625,25 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 <MaterialIcons name="pin" size={20} color="#7C3AED" />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuText}>Mã PIN bảo mật (4 chữ số)</Text>
-                <Text style={styles.menuSubText}>Đang thiết lập: •••• (Chạm để đổi mã)</Text>
+                <Text style={[styles.menuText, { color: theme.textPrimary }]}>Mã PIN bảo mật (4 chữ số)</Text>
+                <Text style={[styles.menuSubText, { color: theme.textMuted }]}>Đang thiết lập: •••• (Chạm để đổi mã)</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color={Colors.textMuted} />
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </TouchableOpacity>
 
             {/* Notifications */}
-            <View style={styles.menuItem}>
+            <View style={[styles.menuItem, { borderBottomColor: 'transparent' }]}>
               <View style={[styles.iconBox, { backgroundColor: '#FFE4E6' }]}>
                 <MaterialIcons name="notifications-active" size={20} color="#BE123C" />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuText}>Cảnh báo chi tiêu thông minh</Text>
-                <Text style={styles.menuSubText}>Thông báo khi hũ chi tiêu vượt 80%</Text>
+                <Text style={[styles.menuText, { color: theme.textPrimary }]}>Cảnh báo chi tiêu thông minh</Text>
+                <Text style={[styles.menuSubText, { color: theme.textMuted }]}>Thông báo khi hũ chi tiêu vượt 80%</Text>
               </View>
               <Switch
                 value={notificationsEnabled}
                 onValueChange={setNotificationsEnabled}
-                trackColor={{ false: Colors.border, true: Colors.primary }}
-              />
-            </View>
-
-            {/* Dark Mode */}
-            <View style={styles.menuItem}>
-              <View style={[styles.iconBox, { backgroundColor: '#F1F5F9' }]}>
-                <MaterialIcons name="dark-mode" size={20} color={Colors.textPrimary} />
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuText}>Giao diện ban đêm (Dark Mode)</Text>
-                <Text style={styles.menuSubText}>Tự động đồng bộ theo hệ thống thiết bị</Text>
-              </View>
-              <Switch
-                value={darkModeEnabled}
-                onValueChange={setDarkModeEnabled}
-                trackColor={{ false: Colors.border, true: Colors.primary }}
+                trackColor={{ false: Colors.border, true: theme.primary }}
               />
             </View>
           </View>
@@ -566,107 +651,137 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
         {/* SETTINGS GROUP 3: SAO LƯU & TRÍCH XUẤT */}
         <View style={styles.groupWrapper}>
-          <Text style={styles.groupTitle}>SAO LƯU & XUẤT DỮ LIỆU</Text>
-          <View style={[styles.menuCard, Shadows.card]}>
+          <Text style={[styles.groupTitle, { color: theme.textMuted }]}>SAO LƯU & XUẤT DỮ LIỆU</Text>
+          <View style={[styles.menuCard, Shadows.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             {/* Export CSV */}
-            <TouchableOpacity style={styles.menuItem} onPress={() => setExportModalVisible(true)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={[styles.menuItem, { borderBottomColor: theme.borderSubtle }]}
+              onPress={() => setExportModalVisible(true)}
+              activeOpacity={0.7}
+            >
               <View style={[styles.iconBox, { backgroundColor: '#E0F2FE' }]}>
                 <MaterialIcons name="file-download" size={20} color="#0284C7" />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuText}>Xuất báo cáo giao dịch (CSV / Excel)</Text>
-                <Text style={styles.menuSubText}>Bảng tính hoàn chỉnh gồm ngày, loại, hũ chi tiêu</Text>
+                <Text style={[styles.menuText, { color: theme.textPrimary }]}>Xuất báo cáo giao dịch (CSV / Excel)</Text>
+                <Text style={[styles.menuSubText, { color: theme.textMuted }]}>Bảng tính hoàn chỉnh gồm ngày, loại, hũ chi tiêu</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color={Colors.textMuted} />
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </TouchableOpacity>
 
             {/* Backup & Restore JSON */}
-            <TouchableOpacity style={styles.menuItem} onPress={() => setBackupModalVisible(true)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={[styles.menuItem, { borderBottomColor: theme.borderSubtle }]}
+              onPress={() => setBackupModalVisible(true)}
+              activeOpacity={0.7}
+            >
               <View style={[styles.iconBox, { backgroundColor: '#FEF9C3' }]}>
                 <MaterialIcons name="settings-backup-restore" size={20} color="#CA8A04" />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuText}>Sao lưu & Khôi phục (JSON Snapshot)</Text>
-                <Text style={styles.menuSubText}>Lưu bản sao an toàn & khôi phục toàn bộ bảng</Text>
+                <Text style={[styles.menuText, { color: theme.textPrimary }]}>Sao lưu & Khôi phục (JSON Snapshot)</Text>
+                <Text style={[styles.menuSubText, { color: theme.textMuted }]}>Lưu bản sao an toàn & khôi phục toàn bộ bảng</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color={Colors.textMuted} />
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </TouchableOpacity>
 
             {/* FAQ & Guide */}
-            <TouchableOpacity style={styles.menuItem} onPress={() => setFaqModalVisible(true)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={[styles.menuItem, { borderBottomColor: 'transparent' }]}
+              onPress={() => setFaqModalVisible(true)}
+              activeOpacity={0.7}
+            >
               <View style={[styles.iconBox, { backgroundColor: '#F3F4F6' }]}>
-                <MaterialIcons name="help-outline" size={20} color={Colors.textPrimary} />
+                <MaterialIcons name="help-outline" size={20} color={theme.textPrimary} />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuText}>Trung tâm trợ giúp & Hướng dẫn 6 Hũ</Text>
-                <Text style={styles.menuSubText}>Chi tiết quy tắc T. Harv Eker, What-If Simulator</Text>
+                <Text style={[styles.menuText, { color: theme.textPrimary }]}>Trung tâm trợ giúp & Hướng dẫn 6 Hũ</Text>
+                <Text style={[styles.menuSubText, { color: theme.textMuted }]}>Chi tiết quy tắc T. Harv Eker, What-If Simulator</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color={Colors.textMuted} />
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* SETTINGS GROUP 4: NGUY HIỂM & ĐẶT LẠI */}
         <View style={styles.groupWrapper}>
-          <Text style={styles.groupTitle}>NÂNG CAO & HỆ THỐNG</Text>
-          <View style={[styles.menuCard, Shadows.card]}>
+          <Text style={[styles.groupTitle, { color: theme.textMuted }]}>NÂNG CAO & HỆ THỐNG</Text>
+          <View style={[styles.menuCard, Shadows.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <TouchableOpacity
-              style={styles.menuItem}
+              style={[styles.menuItem, { borderBottomColor: 'transparent' }]}
               onPress={() => setResetModalVisible(true)}
               activeOpacity={0.7}
             >
               <View style={[styles.iconBox, { backgroundColor: '#FEE2E2' }]}>
-                <MaterialIcons name="restart-alt" size={20} color={Colors.error} />
+                <MaterialIcons name="restart-alt" size={20} color={theme.error} />
               </View>
               <View style={styles.menuContent}>
-                <Text style={[styles.menuText, { color: Colors.error }]}>Khôi phục dữ liệu ban đầu (Factory Reset)</Text>
-                <Text style={styles.menuSubText}>Làm mới toàn bộ SQLite về bộ dữ liệu chuẩn mẫu</Text>
+                <Text style={[styles.menuText, { color: theme.error }]}>Khôi phục dữ liệu ban đầu (Factory Reset)</Text>
+                <Text style={[styles.menuSubText, { color: theme.textMuted }]}>Làm mới toàn bộ SQLite về bộ dữ liệu chuẩn mẫu</Text>
               </View>
-              <MaterialIcons name="chevron-right" size={20} color={Colors.error} />
+              <MaterialIcons name="chevron-right" size={20} color={theme.error} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* LOGOUT BUTTON */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
+        {/* NÚT ĐĂNG XUẤT (BẬT MODAL XÁC NHẬN CHẠY 100% TRÊN WEB & MOBILE) */}
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          onPress={() => setLogoutModalVisible(true)}
+          activeOpacity={0.85}
+        >
           <MaterialIcons name="logout" size={20} color={Colors.error} />
           <Text style={styles.logoutText}>Đăng xuất khỏi tài khoản</Text>
         </TouchableOpacity>
 
-        <Text style={styles.versionText}>
-          ExpenseMate Pro v2.5.0 • SQLite Reactive • Docker Postgres 5433 • Clean Minimalist Bento
+        <Text style={[styles.versionText, { color: theme.textMuted }]}>
+          ExpenseMate Pro v2.6.0 • Dark Mode OLED • Multi-Tenant RBAC Isolation
         </Text>
         <View style={{ height: 110 }} />
-      </View>
+      </ScrollView>
 
       {/* ============================================================ */}
-      {/* 1. MODAL CHỈNH SỬA HỒ SƠ */}
+      {/* 1. MODAL CHỈNH SỬA THÔNG TIN KHÁCH HÀNG HOÀN THIỆN */}
       {/* ============================================================ */}
       <Modal visible={editProfileVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chỉnh sửa hồ sơ cá nhân</Text>
+              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
+                Chỉnh sửa thông tin khách hàng
+              </Text>
               <TouchableOpacity onPress={() => setEditProfileVisible(false)}>
-                <MaterialIcons name="close" size={24} color={Colors.textSecondary} />
+                <MaterialIcons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputSectionLabel}>CHỌN ẢNH ĐẠI DIỆN</Text>
+              {/* Role Info Tag */}
+              <View style={styles.roleModalBanner}>
+                <MaterialIcons
+                  name={user.role === 'ADMIN' ? 'admin-panel-settings' : 'verified-user'}
+                  size={18}
+                  color={user.role === 'ADMIN' ? '#7C3AED' : theme.primary}
+                />
+                <Text style={styles.roleModalBannerText}>
+                  Vai trò tài khoản: <Text style={{ fontWeight: '800' }}>{user.role === 'ADMIN' ? 'QUẢN TRỊ VIÊN' : 'KHÁCH HÀNG'}</Text> (Bảo vệ dữ liệu cô lập)
+                </Text>
+              </View>
+
+              <Text style={[styles.inputSectionLabel, { color: theme.textMuted }]}>CHỌN ẢNH ĐẠI DIỆN</Text>
               <View style={styles.avatarPickerRow}>
                 {AVATAR_OPTIONS.map((uri, idx) => (
                   <TouchableOpacity
                     key={idx}
                     style={[
                       styles.avatarPickItem,
-                      editAvatar === uri && styles.avatarPickItemActive,
+                      editAvatar === uri && { borderColor: theme.primary },
                     ]}
                     onPress={() => setEditAvatar(uri)}
                   >
                     <Image source={{ uri }} style={styles.avatarThumbnail} />
                     {editAvatar === uri && (
-                      <View style={styles.avatarCheckBadge}>
+                      <View style={[styles.avatarCheckBadge, { backgroundColor: theme.primary }]}>
                         <MaterialIcons name="check" size={12} color="#FFF" />
                       </View>
                     )}
@@ -674,39 +789,76 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 ))}
               </View>
 
-              <Text style={styles.inputSectionLabel}>HỌ VÀ TÊN</Text>
+              <Text style={[styles.inputSectionLabel, { color: theme.textMuted }]}>HỌ VÀ TÊN KHÁCH HÀNG</Text>
               <TextInput
-                style={styles.textInput}
+                style={[styles.textInput, { backgroundColor: theme.surfaceContainerLow, color: theme.textPrimary, borderColor: theme.border }]}
                 value={editName}
                 onChangeText={setEditName}
                 placeholder="Nhập họ và tên"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={theme.textMuted}
               />
 
-              <Text style={styles.inputSectionLabel}>EMAIL</Text>
+              <Text style={[styles.inputSectionLabel, { color: theme.textMuted }]}>ĐỊA CHỈ EMAIL</Text>
               <TextInput
-                style={styles.textInput}
+                style={[styles.textInput, { backgroundColor: theme.surfaceContainerLow, color: theme.textPrimary, borderColor: theme.border }]}
                 value={editEmail}
                 onChangeText={setEditEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 placeholder="Nhập địa chỉ email"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={theme.textMuted}
               />
 
-              <Text style={styles.inputSectionLabel}>SỐ ĐIỆN THOẠI</Text>
+              <Text style={[styles.inputSectionLabel, { color: theme.textMuted }]}>SỐ ĐIỆN THOẠI</Text>
               <TextInput
-                style={styles.textInput}
+                style={[styles.textInput, { backgroundColor: theme.surfaceContainerLow, color: theme.textPrimary, borderColor: theme.border }]}
                 value={editPhone}
                 onChangeText={setEditPhone}
                 keyboardType="phone-pad"
                 placeholder="Nhập số điện thoại"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={theme.textMuted}
               />
 
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveProfile} activeOpacity={0.85}>
+              <Text style={[styles.inputSectionLabel, { color: theme.textMuted }]}>DANH HIỆU / CẤP BẬC TÀI CHÍNH</Text>
+              <View style={styles.tierChoiceRow}>
+                {TIER_OPTIONS.map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[
+                      styles.tierChoicePill,
+                      editTier === t && { backgroundColor: theme.primary, borderColor: theme.primary },
+                    ]}
+                    onPress={() => setEditTier(t)}
+                  >
+                    <Text
+                      style={[
+                        styles.tierChoiceText,
+                        editTier === t && { color: '#FFF' },
+                      ]}
+                    >
+                      {t}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.inputSectionLabel, { color: theme.textMuted }]}>THU NHẬP HÀNG THÁNG (VNĐ)</Text>
+              <TextInput
+                style={[styles.textInput, { backgroundColor: theme.surfaceContainerLow, color: theme.textPrimary, borderColor: theme.border }]}
+                value={editIncome}
+                onChangeText={setEditIncome}
+                keyboardType="numeric"
+                placeholder="Ví dụ: 35000000"
+                placeholderTextColor={theme.textMuted}
+              />
+
+              <TouchableOpacity
+                style={[styles.saveBtn, { backgroundColor: theme.primary }]}
+                onPress={handleSaveProfile}
+                activeOpacity={0.85}
+              >
                 <MaterialIcons name="check-circle" size={18} color="#FFF" />
-                <Text style={styles.saveBtnText}>Lưu Thay Đổi</Text>
+                <Text style={styles.saveBtnText}>Lưu Thay Đổi Hồ Sơ</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -714,23 +866,57 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       </Modal>
 
       {/* ============================================================ */}
-      {/* 2. MODAL BẢO MẬT MÃ PIN */}
+      {/* 2. MODAL XÁC NHẬN ĐĂNG XUẤT (HOẠT ĐỘNG 100% TRÊN WEB) */}
+      {/* ============================================================ */}
+      <Modal visible={logoutModalVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.dangerSheet, { backgroundColor: theme.surface }]}>
+            <View style={styles.dangerIconCircle}>
+              <MaterialIcons name="logout" size={32} color={Colors.error} />
+            </View>
+
+            <Text style={[styles.dangerTitle, { color: theme.textPrimary }]}>Xác Nhận Đăng Xuất</Text>
+            <Text style={[styles.dangerMessage, { color: theme.textSecondary }]}>
+              Bạn có chắc chắn muốn đăng xuất khỏi tài khoản "{user.name}"? Dữ liệu tài chính riêng biệt của tài khoản này vẫn được bảo toàn an toàn trên thiết bị.
+            </Text>
+
+            <View style={styles.dangerActionsRow}>
+              <TouchableOpacity
+                style={[styles.dangerCancelBtn, { backgroundColor: theme.surfaceContainerLow }]}
+                onPress={() => setLogoutModalVisible(false)}
+              >
+                <Text style={[styles.dangerCancelBtnText, { color: theme.textSecondary }]}>Hủy Bỏ</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.dangerConfirmBtn}
+                onPress={handleConfirmLogout}
+              >
+                <Text style={styles.dangerConfirmBtnText}>Xác Nhận Đăng Xuất</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ============================================================ */}
+      {/* 3. MODAL BẢO MẬT MÃ PIN */}
       {/* ============================================================ */}
       <Modal visible={securityModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.pinSheet}>
+          <View style={[styles.pinSheet, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Bảo Mật Mã PIN</Text>
+              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Bảo Mật Mã PIN</Text>
               <TouchableOpacity onPress={() => setSecurityModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color={Colors.textSecondary} />
+                <MaterialIcons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.pinIconCircle}>
-              <MaterialIcons name="lock" size={32} color={Colors.primary} />
+            <View style={[styles.pinIconCircle, { backgroundColor: theme.primaryLight }]}>
+              <MaterialIcons name="lock" size={32} color={theme.primary} />
             </View>
 
-            <Text style={styles.pinStatusPrompt}>{pinStatusMessage}</Text>
+            <Text style={[styles.pinStatusPrompt, { color: theme.textSecondary }]}>{pinStatusMessage}</Text>
 
             {/* 4 PIN Dots */}
             <View style={styles.pinDotsRow}>
@@ -739,7 +925,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 return (
                   <View
                     key={index}
-                    style={[styles.pinDot, filled && styles.pinDotFilled]}
+                    style={[
+                      styles.pinDot,
+                      { borderColor: theme.primary },
+                      filled && { backgroundColor: theme.primary },
+                    ]}
                   />
                 );
               })}
@@ -755,22 +945,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                   return (
                     <TouchableOpacity
                       key={i}
-                      style={styles.keypadKey}
+                      style={[styles.keypadKey, { backgroundColor: theme.surfaceContainerLow }]}
                       onPress={handlePinBackspace}
                       activeOpacity={0.7}
                     >
-                      <MaterialIcons name="backspace" size={22} color={Colors.textPrimary} />
+                      <MaterialIcons name="backspace" size={22} color={theme.textPrimary} />
                     </TouchableOpacity>
                   );
                 }
                 return (
                   <TouchableOpacity
                     key={i}
-                    style={styles.keypadKey}
+                    style={[styles.keypadKey, { backgroundColor: theme.surfaceContainerLow }]}
                     onPress={() => handlePinKeyPress(key)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.keypadKeyText}>{key}</Text>
+                    <Text style={[styles.keypadKeyText, { color: theme.textPrimary }]}>{key}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -780,34 +970,36 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       </Modal>
 
       {/* ============================================================ */}
-      {/* 3. MODAL TIỀN TỆ & TỶ GIÁ NGOẠI TỆ */}
+      {/* 4. MODAL TIỀN TỆ & TỶ GIÁ NGOẠI TỆ */}
       {/* ============================================================ */}
       <Modal visible={currencyModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Tiền tệ & Tỷ giá hối đoái</Text>
+              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Tiền tệ & Tỷ giá hối đoái</Text>
               <TouchableOpacity onPress={() => setCurrencyModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color={Colors.textSecondary} />
+                <MaterialIcons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputSectionLabel}>CHỌN ĐƠN VỊ TIỀN TỆ HIỂN THỊ</Text>
+              <Text style={[styles.inputSectionLabel, { color: theme.textMuted }]}>CHỌN ĐƠN VỊ TIỀN TỆ HIỂN THỊ</Text>
               <View style={styles.currencySelectRow}>
                 {(['VND', 'USD', 'EUR', 'JPY'] as const).map((curr) => (
                   <TouchableOpacity
                     key={curr}
                     style={[
                       styles.currencyChoiceBtn,
-                      selectedCurrency === curr && styles.currencyChoiceBtnActive,
+                      { backgroundColor: theme.surfaceContainerLow, borderColor: theme.border },
+                      selectedCurrency === curr && { backgroundColor: theme.primary, borderColor: theme.primary },
                     ]}
                     onPress={() => setSelectedCurrency(curr)}
                   >
                     <Text
                       style={[
                         styles.currencyChoiceText,
-                        selectedCurrency === curr && styles.currencyChoiceTextActive,
+                        { color: theme.textSecondary },
+                        selectedCurrency === curr && { color: '#FFF' },
                       ]}
                     >
                       {curr}
@@ -816,55 +1008,49 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 ))}
               </View>
 
-              <Text style={styles.inputSectionLabel}>CÔNG CỤ QUY ĐỔI NHANH (LIVE RATES)</Text>
-              <View style={styles.converterInputContainer}>
+              <Text style={[styles.inputSectionLabel, { color: theme.textMuted }]}>CÔNG CỤ QUY ĐỔI NHANH (LIVE RATES)</Text>
+              <View style={[styles.converterInputContainer, { backgroundColor: theme.surfaceContainerLow, borderColor: theme.border }]}>
                 <TextInput
-                  style={styles.converterInput}
+                  style={[styles.converterInput, { color: theme.textPrimary }]}
                   value={converterAmount}
                   onChangeText={setConverterAmount}
                   keyboardType="numeric"
                   placeholder="Nhập số tiền VND..."
+                  placeholderTextColor={theme.textMuted}
                 />
-                <Text style={styles.converterUnit}>₫ VND</Text>
+                <Text style={[styles.converterUnit, { color: theme.textMuted }]}>₫ VND</Text>
               </View>
 
               {ratesLoading ? (
-                <ActivityIndicator style={{ marginVertical: 16 }} color={Colors.primary} />
+                <ActivityIndicator style={{ marginVertical: 16 }} color={theme.primary} />
               ) : (
-                <View style={styles.ratesTable}>
+                <View style={[styles.ratesTable, { backgroundColor: theme.surfaceContainerLow }]}>
                   <View style={styles.rateRow}>
-                    <Text style={styles.rateCurrencyLabel}>🇺🇸 USD (Đô la Mỹ)</Text>
-                    <Text style={styles.rateValueText}>
+                    <Text style={[styles.rateCurrencyLabel, { color: theme.textPrimary }]}>🇺🇸 USD (Đô la Mỹ)</Text>
+                    <Text style={[styles.rateValueText, { color: theme.primary }]}>
                       ≈ {(numAmount / (rates.USD || 25450)).toFixed(2)} $
                     </Text>
                   </View>
                   <View style={styles.rateRow}>
-                    <Text style={styles.rateCurrencyLabel}>🇪🇺 EUR (Euro)</Text>
-                    <Text style={styles.rateValueText}>
+                    <Text style={[styles.rateCurrencyLabel, { color: theme.textPrimary }]}>🇪🇺 EUR (Euro)</Text>
+                    <Text style={[styles.rateValueText, { color: theme.primary }]}>
                       ≈ {(numAmount / (rates.EUR || 27100)).toFixed(2)} €
                     </Text>
                   </View>
                   <View style={styles.rateRow}>
-                    <Text style={styles.rateCurrencyLabel}>🇯🇵 JPY (Yên Nhật)</Text>
-                    <Text style={styles.rateValueText}>
+                    <Text style={[styles.rateCurrencyLabel, { color: theme.textPrimary }]}>🇯🇵 JPY (Yên Nhật)</Text>
+                    <Text style={[styles.rateValueText, { color: theme.primary }]}>
                       ≈ {Math.round(numAmount / (rates.JPY || 168)).toLocaleString('vi-VN')} ¥
                     </Text>
                   </View>
                 </View>
               )}
 
-              <View style={styles.infoAlertBox}>
-                <MaterialIcons name="info" size={18} color={Colors.info} />
-                <Text style={styles.infoAlertText}>
-                  Tỷ giá tham chiếu liên ngân hàng thời gian thực qua Axios Network API.
-                </Text>
-              </View>
-
               <TouchableOpacity
-                style={styles.saveBtn}
+                style={[styles.saveBtn, { backgroundColor: theme.primary }]}
                 onPress={() => {
                   setCurrencyModalVisible(false);
-                  Alert.alert('Thành công', `Đã lưu thiết lập tiền tệ: ${selectedCurrency}`);
+                  showToast(`✅ Đã áp dụng tiền tệ: ${selectedCurrency}`);
                 }}
               >
                 <Text style={styles.saveBtnText}>Áp Dụng Thiết Lập</Text>
@@ -875,30 +1061,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       </Modal>
 
       {/* ============================================================ */}
-      {/* 4. MODAL XUẤT CSV BÁO CÁO */}
+      {/* 5. MODAL XUẤT CSV BÁO CÁO */}
       {/* ============================================================ */}
       <Modal visible={exportModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Xuất Dữ Liệu Báo Cáo</Text>
+              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Xuất Dữ Liệu Báo Cáo</Text>
               <TouchableOpacity onPress={() => setExportModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color={Colors.textSecondary} />
+                <MaterialIcons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.exportSummaryCard}>
-                <MaterialIcons name="table-view" size={32} color={Colors.primary} />
+              <View style={[styles.exportSummaryCard, { backgroundColor: theme.primaryLight }]}>
+                <MaterialIcons name="table-view" size={32} color={theme.primary} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.exportSummaryTitle}>Sẵn sàng xuất file CSV</Text>
-                  <Text style={styles.exportSummarySub}>
-                    Tổng cộng: {transactions.length} giao dịch • Định dạng chuẩn UTF-8
+                  <Text style={[styles.exportSummaryTitle, { color: theme.primary }]}>Sẵn sàng xuất file CSV</Text>
+                  <Text style={[styles.exportSummarySub, { color: theme.textSecondary }]}>
+                    Tổng cộng: {transactions.length} giao dịch của {user.name}
                   </Text>
                 </View>
               </View>
 
-              <Text style={styles.inputSectionLabel}>XEM TRƯỚC DỮ LIỆU (5 DÒNG ĐẦU TIÊN)</Text>
+              <Text style={[styles.inputSectionLabel, { color: theme.textMuted }]}>XEM TRƯỚC DỮ LIỆU</Text>
               <View style={styles.previewBox}>
                 <Text style={styles.previewText} numberOfLines={8}>
                   {generateCSVContent().split('\n').slice(0, 6).join('\n')}
@@ -906,18 +1092,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               </View>
 
               <View style={styles.actionButtonsRow}>
-                <TouchableOpacity style={styles.actionHalfBtn} onPress={handleCopyCSV} activeOpacity={0.85}>
+                <TouchableOpacity
+                  style={[styles.actionHalfBtn, { backgroundColor: theme.primary }]}
+                  onPress={handleCopyCSV}
+                  activeOpacity={0.85}
+                >
                   <MaterialIcons name="content-copy" size={18} color="#FFF" />
                   <Text style={styles.actionHalfBtnText}>Sao Chép CSV</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.actionHalfBtn, { backgroundColor: Colors.secondary }]}
+                  style={[styles.actionHalfBtn, { backgroundColor: theme.secondary }]}
                   onPress={() => {
-                    Alert.alert(
-                      'Tải file báo cáo',
-                      `Đã khởi tạo gói xuất file ExpenseMate_Report_${new Date().toISOString().slice(0, 10)}.csv thành công.`
-                    );
+                    showToast('📁 Đã tải tệp báo cáo chi tiêu!');
                     setExportModalVisible(false);
                   }}
                   activeOpacity={0.85}
@@ -932,41 +1119,44 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       </Modal>
 
       {/* ============================================================ */}
-      {/* 5. MODAL SAO LƯU & KHÔI PHỤC JSON */}
+      {/* 6. MODAL SAO LƯU & KHÔI PHỤC JSON */}
       {/* ============================================================ */}
       <Modal visible={backupModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Sao Lưu & Khôi Phục JSON</Text>
+              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Sao Lưu & Khôi Phục JSON</Text>
               <TouchableOpacity onPress={() => setBackupModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color={Colors.textSecondary} />
+                <MaterialIcons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.backupCard}>
-                <MaterialIcons name="cloud-upload" size={28} color={Colors.primary} />
+              <View style={[styles.backupCard, { backgroundColor: theme.surfaceContainerLow }]}>
+                <MaterialIcons name="cloud-upload" size={28} color={theme.primary} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.backupCardTitle}>Tạo bản sao lưu toàn diện</Text>
-                  <Text style={styles.backupCardSub}>
-                    Ghi lại giao dịch, ví, hũ chi tiêu và ngân sách vào một snapshot.
+                  <Text style={[styles.backupCardTitle, { color: theme.textPrimary }]}>Tạo bản sao lưu toàn diện</Text>
+                  <Text style={[styles.backupCardSub, { color: theme.textMuted }]}>
+                    Lưu trữ dữ liệu ví và giao dịch của {user.name} vào 1 snapshot.
                   </Text>
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.createBackupBtn} onPress={handleCreateBackup} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[styles.createBackupBtn, { backgroundColor: theme.primary }]}
+                onPress={handleCreateBackup}
+                activeOpacity={0.85}
+              >
                 <MaterialIcons name="add-to-photos" size={18} color="#FFF" />
                 <Text style={styles.createBackupBtnText}>Tạo Bản Sao Lưu Mới</Text>
               </TouchableOpacity>
 
               {savedSnapshot && (
                 <View style={styles.snapshotInfoBox}>
-                  <Text style={styles.snapshotTitle}>Bản sao lưu hiện hữu:</Text>
-                  <Text style={styles.snapshotDetail}>• Thời gian tạo: {new Date(savedSnapshot.exportedAt).toLocaleString('vi-VN')}</Text>
+                  <Text style={styles.snapshotTitle}>Bản sao lưu gần nhất:</Text>
+                  <Text style={styles.snapshotDetail}>• Ngày tạo: {new Date(savedSnapshot.exportedAt).toLocaleString('vi-VN')}</Text>
                   <Text style={styles.snapshotDetail}>• Giao dịch: {savedSnapshot.transactions.length}</Text>
-                  <Text style={styles.snapshotDetail}>• Số lượng ví: {savedSnapshot.wallets.length}</Text>
-                  <Text style={styles.snapshotDetail}>• Số hũ phân bổ: {savedSnapshot.jars.length}</Text>
+                  <Text style={styles.snapshotDetail}>• Số ví: {savedSnapshot.wallets.length}</Text>
 
                   <TouchableOpacity style={styles.restoreBtn} onPress={handleRestoreBackup} activeOpacity={0.85}>
                     <MaterialIcons name="restore" size={18} color="#FFF" />
@@ -980,22 +1170,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       </Modal>
 
       {/* ============================================================ */}
-      {/* 6. MODAL KIỂM TRA MÁY CHỦ & BACKEND */}
+      {/* 7. MODAL KIỂM TRA MÁY CHỦ & BACKEND */}
       {/* ============================================================ */}
       <Modal visible={serverModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Kết Nối Máy Chủ & Database</Text>
+              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Kết Nối Máy Chủ & Database</Text>
               <TouchableOpacity onPress={() => setServerModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color={Colors.textSecondary} />
+                <MaterialIcons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.serverStatusCard}>
+              <View style={[styles.serverStatusCard, { backgroundColor: theme.surfaceContainerLow }]}>
                 <View style={styles.serverStatusRow}>
-                  <Text style={styles.serverLabel}>Backend Container:</Text>
+                  <Text style={[styles.serverLabel, { color: theme.textSecondary }]}>Backend Container:</Text>
                   <View style={styles.serverPill}>
                     <View style={[styles.liveDot, { backgroundColor: serverStatus.online ? Colors.income : Colors.expense }]} />
                     <Text style={styles.serverPillText}>{serverStatus.online ? 'ONLINE' : 'OFFLINE'}</Text>
@@ -1003,24 +1193,28 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 </View>
 
                 <View style={styles.serverStatusRow}>
-                  <Text style={styles.serverLabel}>Postgres Host Port:</Text>
-                  <Text style={styles.serverValue}>5433:5432</Text>
+                  <Text style={[styles.serverLabel, { color: theme.textSecondary }]}>Postgres Host Port:</Text>
+                  <Text style={[styles.serverValue, { color: theme.textPrimary }]}>5433:5432</Text>
                 </View>
 
                 <View style={styles.serverStatusRow}>
-                  <Text style={styles.serverLabel}>Độ trễ phản hồi (Latency):</Text>
-                  <Text style={styles.serverValue}>{serverStatus.latency} ms</Text>
+                  <Text style={[styles.serverLabel, { color: theme.textSecondary }]}>Độ trễ phản hồi (Latency):</Text>
+                  <Text style={[styles.serverValue, { color: theme.textPrimary }]}>{serverStatus.latency} ms</Text>
                 </View>
 
                 <View style={styles.serverStatusRow}>
-                  <Text style={styles.serverLabel}>Trạng thái cơ sở dữ liệu:</Text>
-                  <Text style={styles.serverValue}>{serverStatus.dbStatus}</Text>
+                  <Text style={[styles.serverLabel, { color: theme.textSecondary }]}>Trạng thái cơ sở dữ liệu:</Text>
+                  <Text style={[styles.serverValue, { color: theme.textPrimary }]}>{serverStatus.dbStatus}</Text>
                 </View>
               </View>
 
-              <Text style={styles.serverMessageText}>{serverStatus.message}</Text>
+              <Text style={[styles.serverMessageText, { color: theme.textMuted }]}>{serverStatus.message}</Text>
 
-              <TouchableOpacity style={styles.saveBtn} onPress={handleTestServerHealth} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[styles.saveBtn, { backgroundColor: theme.primary }]}
+                onPress={handleTestServerHealth}
+                activeOpacity={0.85}
+              >
                 <MaterialIcons name="refresh" size={18} color="#FFF" />
                 <Text style={styles.saveBtnText}>Kiểm Tra Lại Kết Nối</Text>
               </TouchableOpacity>
@@ -1030,15 +1224,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       </Modal>
 
       {/* ============================================================ */}
-      {/* 7. MODAL TRUNG TÂM TRỢ GIÚP & FAQ */}
+      {/* 8. MODAL TRUNG TÂM TRỢ GIÚP & FAQ */}
       {/* ============================================================ */}
       <Modal visible={faqModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Hướng Dẫn & Trợ Giúp</Text>
+              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Hướng Dẫn & Trợ Giúp</Text>
               <TouchableOpacity onPress={() => setFaqModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color={Colors.textSecondary} />
+                <MaterialIcons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -1053,31 +1247,31 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                   a: 'Công cụ giúp bạn dự báo trước tác động dòng tiền khi chuẩn bị mua món đồ lớn (như điện thoại, xe máy). Thuật toán tính toán điểm khả thi từ 0-1000 và đưa ra lời khuyên an toàn.',
                 },
                 {
-                  q: '3. Làm thế nào để quản lý nhiều ví cùng lúc?',
-                  a: 'Hệ thống hỗ trợ Tiền mặt, Tài khoản ngân hàng, Ví điện tử MoMo, Thẻ tín dụng. Bạn có thể thực hiện chuyển tiền giữa các ví một cách dễ dàng và minh bạch.',
+                  q: '3. Dữ liệu của tôi có bị nhìn thấy bởi tài khoản khác không?',
+                  a: 'HOÀN TOÀN KHÔNG. Hệ thống áp dụng cơ chế cô lập dữ liệu (Multi-Tenant Isolation). Mỗi tài khoản đăng nhập chỉ xem đúng số dư, ví và lịch sử giao dịch của chính mình.',
                 },
                 {
-                  q: '4. Dữ liệu của tôi được lưu trữ ở đâu?',
-                  a: 'Dữ liệu được lưu trữ an toàn trong SQLite ngay trên thiết bị của bạn. Khi có kết nối mạng và tài khoản, dữ liệu sẽ được đồng bộ hóa lên máy chủ đám mây được mã hóa.',
+                  q: '4. Chế độ Đen Trắng (Dark Mode) có tác dụng gì?',
+                  a: 'Chế độ Đen Trắng OLED giúp tiết kiệm pin cho màn hình AMOLED, giảm mỏi mắt khi sử dụng vào ban đêm và mang lại giao diện tinh tế, sang trọng chuẩn công thái học.',
                 },
               ].map((faq, index) => {
                 const isExpanded = expandedFaqIndex === index;
                 return (
                   <TouchableOpacity
                     key={index}
-                    style={styles.faqCard}
+                    style={[styles.faqCard, { backgroundColor: theme.surfaceContainerLow, borderColor: theme.border }]}
                     onPress={() => setExpandedFaqIndex(isExpanded ? null : index)}
                     activeOpacity={0.8}
                   >
                     <View style={styles.faqHeader}>
-                      <Text style={styles.faqQuestion}>{faq.q}</Text>
+                      <Text style={[styles.faqQuestion, { color: theme.textPrimary }]}>{faq.q}</Text>
                       <MaterialIcons
                         name={isExpanded ? 'expand-less' : 'expand-more'}
                         size={22}
-                        color={Colors.primary}
+                        color={theme.primary}
                       />
                     </View>
-                    {isExpanded && <Text style={styles.faqAnswer}>{faq.a}</Text>}
+                    {isExpanded && <Text style={[styles.faqAnswer, { color: theme.textSecondary, borderTopColor: theme.border }]}>{faq.a}</Text>}
                   </TouchableOpacity>
                 );
               })}
@@ -1087,26 +1281,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       </Modal>
 
       {/* ============================================================ */}
-      {/* 8. MODAL CẢNH BÁO RESET DỮ LIỆU */}
+      {/* 9. MODAL CẢNH BÁO RESET DỮ LIỆU */}
       {/* ============================================================ */}
       <Modal visible={resetModalVisible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.dangerSheet}>
+          <View style={[styles.dangerSheet, { backgroundColor: theme.surface }]}>
             <View style={styles.dangerIconCircle}>
               <MaterialIcons name="warning" size={32} color={Colors.error} />
             </View>
 
-            <Text style={styles.dangerTitle}>Khôi phục dữ liệu gốc?</Text>
-            <Text style={styles.dangerMessage}>
-              Thao tác này sẽ xóa sạch các giao dịch hiện tại và nạp lại toàn bộ dữ liệu mẫu ban đầu (6 hũ tài chính, các ví ảo, ngân sách chuẩn).
+            <Text style={[styles.dangerTitle, { color: theme.textPrimary }]}>Khôi phục dữ liệu gốc?</Text>
+            <Text style={[styles.dangerMessage, { color: theme.textSecondary }]}>
+              Thao tác này sẽ xóa sạch các giao dịch hiện tại của tài khoản và nạp lại toàn bộ dữ liệu mẫu ban đầu.
             </Text>
 
             <View style={styles.dangerActionsRow}>
               <TouchableOpacity
-                style={styles.dangerCancelBtn}
+                style={[styles.dangerCancelBtn, { backgroundColor: theme.surfaceContainerLow }]}
                 onPress={() => setResetModalVisible(false)}
               >
-                <Text style={styles.dangerCancelBtnText}>Hủy Bỏ</Text>
+                <Text style={[styles.dangerCancelBtnText, { color: theme.textSecondary }]}>Hủy Bỏ</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1130,43 +1324,55 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F3F9',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.textPrimary,
   },
   headerIconBtn: {
     width: 38,
     height: 38,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerLow,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  toastContainer: {
+    position: 'absolute',
+    top: 64,
+    left: 20,
+    right: 20,
+    backgroundColor: '#0F172A',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: BorderRadius.lg,
+    zIndex: 9999,
+    alignItems: 'center',
+    ...Shadows.cardHover,
+  },
+  toastText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   contentPadding: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
   },
   profileCard: {
-    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   avatarLarge: {
     width: 64,
     height: 64,
     borderRadius: BorderRadius.full,
     borderWidth: 2,
-    borderColor: Colors.primaryLight,
+    borderColor: Colors.borderEmerald,
   },
   profileDetails: {
     flex: 1,
@@ -1176,16 +1382,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
+    flexWrap: 'wrap',
   },
   userName: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.textPrimary,
   },
   tierBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primaryLight,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: BorderRadius.full,
@@ -1194,34 +1399,48 @@ const styles = StyleSheet.create({
   tierText: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.primary,
+  },
+  roleSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
+  roleIndicatorPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: BorderRadius.full,
+  },
+  roleUserPill: {
+    backgroundColor: Colors.primaryLight,
+  },
+  roleAdminPill: {
+    backgroundColor: '#F3E8FF',
+  },
+  roleIndicatorText: {
+    fontSize: 9,
+    fontWeight: '800',
   },
   userEmail: {
     fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
   },
   phoneText: {
     fontSize: 11,
-    color: Colors.textMuted,
     marginTop: 2,
   },
   editProfileBtn: {
     width: 36,
     height: 36,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerLow,
     justifyContent: 'center',
     alignItems: 'center',
   },
   statsStrip: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
     paddingVertical: Spacing.md,
     marginBottom: Spacing.lg,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'space-around',
   },
@@ -1232,19 +1451,16 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.textMuted,
     letterSpacing: 0.5,
   },
   statNumber: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.primary,
     marginTop: 2,
   },
   statDivider: {
     width: 1,
     height: 24,
-    backgroundColor: '#E2E8F0',
   },
   groupWrapper: {
     marginBottom: Spacing.lg,
@@ -1252,24 +1468,20 @@ const styles = StyleSheet.create({
   groupTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.textMuted,
     letterSpacing: 0.8,
     marginBottom: Spacing.sm,
     paddingLeft: Spacing.xs,
   },
   menuCard: {
-    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.xl,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#F1F5F9',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: Spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
   },
   iconBox: {
     width: 38,
@@ -1285,11 +1497,9 @@ const styles = StyleSheet.create({
   menuText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textPrimary,
   },
   menuSubText: {
     fontSize: 12,
-    color: Colors.textMuted,
     marginTop: 2,
   },
   statusDotRow: {
@@ -1320,22 +1530,20 @@ const styles = StyleSheet.create({
   versionText: {
     textAlign: 'center',
     fontSize: 11,
-    color: Colors.textMuted,
     marginTop: Spacing.lg,
   },
 
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: Colors.surface,
     borderTopLeftRadius: BorderRadius.xxl,
     borderTopRightRadius: BorderRadius.xxl,
     padding: Spacing.xl,
-    maxHeight: '85%',
+    maxHeight: '88%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1346,12 +1554,24 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.textPrimary,
+  },
+  roleModalBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: 8,
+    marginBottom: Spacing.sm,
+  },
+  roleModalBannerText: {
+    fontSize: 12,
+    color: '#166534',
+    flex: 1,
   },
   inputSectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.textMuted,
     marginBottom: Spacing.xs,
     marginTop: Spacing.md,
   },
@@ -1367,9 +1587,6 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     position: 'relative',
   },
-  avatarPickItemActive: {
-    borderColor: Colors.primary,
-  },
   avatarThumbnail: {
     width: 52,
     height: 52,
@@ -1379,7 +1596,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: Colors.primary,
     width: 18,
     height: 18,
     borderRadius: 9,
@@ -1387,18 +1603,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   textInput: {
-    backgroundColor: Colors.surfaceContainerLow,
     borderRadius: BorderRadius.lg,
     paddingHorizontal: Spacing.md,
     paddingVertical: 12,
     fontSize: 14,
-    color: Colors.textPrimary,
     borderWidth: 1,
-    borderColor: Colors.border,
+  },
+  tierChoiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginVertical: 4,
+  },
+  tierChoicePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  tierChoiceText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
   },
   saveBtn: {
     flexDirection: 'row',
-    backgroundColor: Colors.primary,
     paddingVertical: 14,
     borderRadius: BorderRadius.xl,
     justifyContent: 'center',
@@ -1415,7 +1646,6 @@ const styles = StyleSheet.create({
 
   // PIN Styles
   pinSheet: {
-    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.xxl,
     marginHorizontal: Spacing.lg,
     marginBottom: 'auto',
@@ -1427,7 +1657,6 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: Colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.md,
@@ -1435,7 +1664,6 @@ const styles = StyleSheet.create({
   pinStatusPrompt: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textSecondary,
     textAlign: 'center',
     marginBottom: Spacing.lg,
   },
@@ -1449,11 +1677,7 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: Colors.primary,
     backgroundColor: 'transparent',
-  },
-  pinDotFilled: {
-    backgroundColor: Colors.primary,
   },
   keypadGrid: {
     flexDirection: 'row',
@@ -1466,7 +1690,6 @@ const styles = StyleSheet.create({
     width: 70,
     height: 56,
     borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainerLow,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1477,7 +1700,6 @@ const styles = StyleSheet.create({
   keypadKeyText: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.textPrimary,
   },
 
   // Currency Styles
@@ -1490,46 +1712,31 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: BorderRadius.md,
-    backgroundColor: Colors.surfaceContainerLow,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  currencyChoiceBtnActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
   },
   currencyChoiceText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textSecondary,
-  },
-  currencyChoiceTextActive: {
-    color: '#FFF',
   },
   converterInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceContainerLow,
     borderRadius: BorderRadius.lg,
     paddingHorizontal: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   converterInput: {
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.textPrimary,
   },
   converterUnit: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textMuted,
   },
   ratesTable: {
-    backgroundColor: '#F8FAFC',
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginTop: Spacing.md,
@@ -1543,33 +1750,16 @@ const styles = StyleSheet.create({
   rateCurrencyLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textPrimary,
   },
   rateValueText: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.primary,
-  },
-  infoAlertBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
-    gap: 6,
-    marginTop: Spacing.md,
-  },
-  infoAlertText: {
-    fontSize: 11,
-    color: Colors.info,
-    flex: 1,
   },
 
   // Export Styles
   exportSummaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primaryLight,
     padding: Spacing.md,
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.md,
@@ -1577,11 +1767,9 @@ const styles = StyleSheet.create({
   exportSummaryTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.primary,
   },
   exportSummarySub: {
     fontSize: 12,
-    color: Colors.textSecondary,
     marginTop: 2,
   },
   previewBox: {
@@ -1606,7 +1794,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
     paddingVertical: 14,
     borderRadius: BorderRadius.xl,
     gap: 6,
@@ -1621,7 +1808,6 @@ const styles = StyleSheet.create({
   backupCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceContainerLow,
     padding: Spacing.md,
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.md,
@@ -1629,16 +1815,13 @@ const styles = StyleSheet.create({
   backupCardTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textPrimary,
   },
   backupCardSub: {
     fontSize: 12,
-    color: Colors.textMuted,
     marginTop: 2,
   },
   createBackupBtn: {
     flexDirection: 'row',
-    backgroundColor: Colors.primary,
     paddingVertical: 14,
     borderRadius: BorderRadius.xl,
     justifyContent: 'center',
@@ -1688,7 +1871,6 @@ const styles = StyleSheet.create({
 
   // Server Status Styles
   serverStatusCard: {
-    backgroundColor: '#F8FAFC',
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     gap: 12,
@@ -1702,12 +1884,10 @@ const styles = StyleSheet.create({
   serverLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textSecondary,
   },
   serverValue: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textPrimary,
   },
   serverPill: {
     flexDirection: 'row',
@@ -1725,19 +1905,16 @@ const styles = StyleSheet.create({
   },
   serverMessageText: {
     fontSize: 12,
-    color: Colors.textMuted,
     textAlign: 'center',
     marginVertical: Spacing.sm,
   },
 
   // FAQ Styles
   faqCard: {
-    backgroundColor: '#F8FAFC',
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
   },
   faqHeader: {
     flexDirection: 'row',
@@ -1747,23 +1924,19 @@ const styles = StyleSheet.create({
   faqQuestion: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textPrimary,
     flex: 1,
     marginRight: Spacing.sm,
   },
   faqAnswer: {
     fontSize: 12,
-    color: Colors.textSecondary,
     lineHeight: 18,
     marginTop: Spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
     paddingTop: Spacing.sm,
   },
 
-  // Danger / Reset Styles
+  // Danger / Reset / Logout Styles
   dangerSheet: {
-    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.xxl,
     marginHorizontal: Spacing.lg,
     marginBottom: 'auto',
@@ -1783,12 +1956,10 @@ const styles = StyleSheet.create({
   dangerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.textPrimary,
     marginBottom: Spacing.xs,
   },
   dangerMessage: {
     fontSize: 13,
-    color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: Spacing.xl,
@@ -1802,13 +1973,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainerLow,
     alignItems: 'center',
   },
   dangerCancelBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textSecondary,
   },
   dangerConfirmBtn: {
     flex: 1,

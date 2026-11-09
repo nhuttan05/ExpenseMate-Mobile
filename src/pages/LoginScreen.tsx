@@ -8,11 +8,11 @@ import {
   TouchableOpacity,
   View,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Shadows, Spacing } from '../constants/theme';
 import { AuthApi } from '../api/authApi';
-import { showAppNotice } from '../utils/appNotice';
 import { useAppDispatch } from '../redux/store';
 import { setCurrentUser } from '../redux/slices/authSlice';
 import { mockUser, mockUser2, mockAdminUser } from '../data/mockData';
@@ -32,60 +32,83 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('demo@expensemate.com');
   const [password, setPassword] = useState('Password123!');
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const performIsolatedLogin = async (userProfile: any) => {
-    // 1. Cô lập dữ liệu: Nạp đúng bộ dữ liệu của Account này vào SQLite & Memory
-    await switchActiveAccountDatabase(userProfile.id);
+    try {
+      // 1. Cô lập dữ liệu: Nạp đúng bộ dữ liệu của Account này vào SQLite & Memory
+      await switchActiveAccountDatabase(userProfile.id);
 
-    // 2. Cập nhật Auth state trong Redux
-    dispatch(setCurrentUser(userProfile));
+      // 2. Cập nhật Auth state trong Redux
+      dispatch(setCurrentUser(userProfile));
 
-    // 3. Nạp lại toàn bộ Redux slices
-    dispatch(loadTransactions());
-    dispatch(loadBudgets());
-    dispatch(loadWalletsAndJars());
-    dispatch(loadRecurringAndDebts());
-    dispatch(loadSimulationData());
+      // 3. Nạp lại toàn bộ Redux slices
+      dispatch(loadTransactions());
+      dispatch(loadBudgets());
+      dispatch(loadWalletsAndJars());
+      dispatch(loadRecurringAndDebts());
+      dispatch(loadSimulationData());
 
-    // 4. Điều hướng
-    if (userProfile.role === 'ADMIN') {
-      navigation.replace('Admin');
-    } else {
+      // 4. Luôn vào Main (TabNavigator sẽ tự động hiện Tab Quản trị nếu là ADMIN)
+      navigation.replace('Main');
+    } catch (err) {
+      console.error('Login isolation error:', err);
       navigation.replace('Main');
     }
   };
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      showAppNotice('Thiếu thông tin', 'Vui lòng nhập email và mật khẩu.');
+    if (!email.trim()) {
+      setNotice('Vui lòng nhập địa chỉ email tài khoản.');
       return;
     }
 
     setLoading(true);
+    setNotice(null);
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Rút ngắn timeout kiểm tra backend (tối đa 800ms) để không bị đơ giao diện
     try {
-      // Thử gọi backend API
-      await AuthApi.login(email.trim(), password);
+      const backendPromise = AuthApi.login(cleanEmail, password);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 800)
+      );
+      await Promise.race([backendPromise, timeoutPromise]);
     } catch {
-      // Nếu offline, tiếp tục với tài khoản cục bộ tương ứng
+      // Tiếp tục với tài khoản cục bộ tương ứng (Offline first)
     }
 
-    // Xác định đối tượng profile tương ứng với email
+    // Xác định profile tài khoản
     let targetProfile = mockUser;
-    const cleanEmail = email.trim().toLowerCase();
-    if (cleanEmail === 'admin@expensemate.com') {
+    if (cleanEmail === 'admin@expensemate.com' || cleanEmail.includes('admin')) {
       targetProfile = mockAdminUser;
-    } else if (cleanEmail === 'user@expensemate.com') {
+    } else if (cleanEmail === 'user@expensemate.com' || cleanEmail.includes('user')) {
       targetProfile = mockUser2;
+    } else {
+      // Tài khoản riêng biệt hoặc demo
+      targetProfile = {
+        ...mockUser,
+        email: cleanEmail,
+      };
     }
 
     await performIsolatedLogin(targetProfile);
     setLoading(false);
   };
 
-  const handleQuickAccountSelect = (profile: any) => {
+  const handleQuickAccountSelect = async (profile: any) => {
     setEmail(profile.email);
     setPassword(profile.role === 'ADMIN' ? 'Admin123!' : 'Password123!');
-    performIsolatedLogin(profile);
+    setLoading(true);
+    await performIsolatedLogin(profile);
+    setLoading(false);
+  };
+
+  const handleGuestQuickMode = async () => {
+    setLoading(true);
+    await performIsolatedLogin(mockUser);
+    setLoading(false);
   };
 
   return (
@@ -99,11 +122,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         </View>
         <Text style={styles.title}>Chào mừng trở lại</Text>
         <Text style={styles.subtitle}>
-          Hệ thống tài chính cá nhân đa tài khoản & phân quyền chuyên nghiệp.
+          Hệ thống quản lý tài chính cá nhân đa tài khoản & phân quyền chuyên nghiệp.
         </Text>
 
+        {notice && (
+          <View style={styles.noticeBox}>
+            <MaterialIcons name="info" size={16} color={Colors.error} />
+            <Text style={styles.noticeText}>{notice}</Text>
+          </View>
+        )}
+
         {/* 1-TAP ACCOUNT SELECTOR */}
-        <Text style={styles.quickSelectLabel}>CHỌN NHANH VAI TRÒ ĐĂNG NHẬP:</Text>
+        <Text style={styles.quickSelectLabel}>CHỌN NHANH VAI TRÒ ĐỂ KIỂM TRA CÔ LẬP DỮ LIỆU:</Text>
         <View style={styles.quickAccountsRow}>
           {/* Account 1: Doanh Nhân Demo */}
           <TouchableOpacity
@@ -149,8 +179,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             <View style={styles.quickRolePillAdmin}>
               <Text style={styles.quickRoleTextAdmin}>ADMIN PRO</Text>
             </View>
-            <Text style={styles.quickCardName}>Admin Hệ Thống</Text>
-            <Text style={styles.quickCardSub}>Quản trị toàn sàn</Text>
+            <Text style={styles.quickCardName}>Admin Quản Trị</Text>
+            <Text style={styles.quickCardSub}>Toàn quyền hệ thống</Text>
           </TouchableOpacity>
         </View>
 
@@ -177,26 +207,34 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             secureTextEntry
           />
 
-          <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-            <Text style={styles.linkRight}>Quên mật khẩu?</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={handleLogin}
             disabled={loading}
             activeOpacity={0.85}
           >
-            <Text style={styles.primaryButtonText}>
-              {loading ? 'Đang xác thực...' : 'Đăng Nhập'}
-            </Text>
+            {loading ? (
+              <ActivityIndicator color="#FFF" size="small" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Đăng Nhập Vào Hệ Thống</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.guestButton}
+            onPress={handleGuestQuickMode}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="flash-on" size={18} color={Colors.primary} />
+            <Text style={styles.guestButtonText}>Trải nghiệm nhanh (Khách / Offline)</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>Chưa có tài khoản?</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-            <Text style={styles.link}> Đăng ký</Text>
+            <Text style={styles.link}> Đăng ký mới</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -239,11 +277,25 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
     lineHeight: 18,
   },
+  noticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: 6,
+    marginBottom: Spacing.md,
+  },
+  noticeText: {
+    fontSize: 12,
+    color: Colors.error,
+    fontWeight: '600',
+  },
   quickSelectLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: Colors.textMuted,
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
     marginBottom: Spacing.xs,
     paddingLeft: Spacing.xs,
   },
@@ -328,25 +380,35 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLow,
     fontSize: 14,
   },
-  linkRight: {
-    color: Colors.primary,
-    textAlign: 'right',
-    fontWeight: '600',
-    fontSize: 13,
-    marginTop: Spacing.sm,
-  },
   primaryButton: {
     height: 50,
     backgroundColor: Colors.primary,
     borderRadius: BorderRadius.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: Spacing.lg,
+    marginTop: Spacing.xl,
   },
   primaryButtonText: {
     color: Colors.textWhite,
     fontSize: 15,
     fontWeight: '800',
+  },
+  guestButton: {
+    height: 46,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: BorderRadius.lg,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 6,
+  },
+  guestButtonText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   footerRow: {
     flexDirection: 'row',

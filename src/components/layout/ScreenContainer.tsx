@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, SafeAreaView, ScrollView, ViewStyle, StyleProp } from 'react-native';
 import { useResponsive } from '../../hooks/useResponsive';
-import { Colors } from '../../constants/theme';
+import { Colors, DarkColors } from '../../constants/theme';
+import { useAppSelector } from '../../redux/store';
 
 interface ScreenContainerProps {
   children: React.ReactNode;
@@ -17,6 +18,8 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
   contentContainerStyle,
 }) => {
   const { contentMaxWidth, isTablet, isLandscape } = useResponsive();
+  const isDarkMode = useAppSelector((state) => state.auth?.isDarkMode);
+  const currentBg = isDarkMode ? DarkColors.background : Colors.background;
 
   const innerStyle: ViewStyle = {
     width: '100%',
@@ -26,7 +29,7 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, style]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: currentBg }, style]}>
       {scrollable ? (
         <ScrollView
           contentContainerStyle={[

@@ -63,6 +63,64 @@ export const Colors = {
   outlineVariant: '#CBD5E1',
 };
 
+export const DarkColors = {
+  // Brand & Fintech Slate
+  primary: '#10B981', // Neon Emerald for Dark OLED
+  primaryDark: '#059669',
+  primaryLight: '#064E3B',
+  primaryAccent: '#34D399',
+
+  navyDeep: '#05080E',
+  navySurface: '#0F172A',
+  navyMuted: '#1E293B',
+
+  // Status & Financial Indicators
+  income: '#10B981',
+  incomeLight: '#064E3B',
+  expense: '#F43F5E',
+  expenseLight: '#4C0519',
+  warning: '#F59E0B',
+  warningLight: '#451A03',
+  info: '#38BDF8',
+  infoLight: '#0C4A6E',
+  purple: '#A855F7',
+  purpleLight: '#3B0764',
+  teal: '#14B8A6',
+  tealLight: '#042F2E',
+
+  secondary: '#10B981',
+  secondaryLight: '#064E3B',
+  secondaryContainer: '#047857',
+  error: '#F43F5E',
+  errorLight: '#4C0519',
+  errorContainer: '#881337',
+
+  // Surfaces & Backgrounds
+  background: '#0B0F17', // OLED Pitch Black Canvas
+  surface: '#151D2A', // Deep Slate Card Surface
+  surfaceElevated: '#1E293B',
+  surfaceSubtle: '#0F172A',
+  surfaceHighlight: '#334155',
+  surfaceContainerLow: '#0E1624',
+  surfaceContainer: '#151D2A',
+  surfaceContainerHigh: '#1E293B',
+  surfaceContainerHighest: '#334155',
+
+  // Typography Colors
+  textPrimary: '#F8FAFC', // Pure White / Silver
+  textSecondary: '#94A3B8', // Slate Light
+  textMuted: '#64748B', // Muted Gray
+  textWhite: '#FFFFFF',
+  primaryFixed: '#064E3B',
+  onPrimaryFixed: '#A7F3D0',
+
+  // Borders & Dividers
+  border: '#1E293B',
+  borderSubtle: '#172033',
+  borderEmerald: '#064E3B',
+  outlineVariant: '#334155',
+};
+
 export const Spacing = {
   xs: 4,
   sm: 8,

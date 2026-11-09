@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors, Spacing, BorderRadius, Shadows } from '../constants/theme';
+import { Colors, DarkColors, Spacing, BorderRadius, Shadows } from '../constants/theme';
 import { formatCurrency, getJarName, getJarShortName } from '../utils/formatters';
 import { useAppDispatch, useAppSelector } from '../redux/store';
 import { toggleBalanceVisibility, loadTransactions } from '../redux/slices/expenseSlice';
@@ -34,8 +34,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const { wallets, jars } = useAppSelector((state) => state.wallet);
   const { health } = useAppSelector((state) => state.simulation);
   const { recurringList, debtsList } = useAppSelector((state) => state.recurring);
-  const { currentUser } = useAppSelector((state) => state.auth);
+  const { currentUser, isDarkMode } = useAppSelector((state) => state.auth);
 
+  const theme = isDarkMode ? DarkColors : Colors;
   const user = currentUser || mockUser;
 
   useEffect(() => {
@@ -70,7 +71,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               <MaterialIcons name="verified" size={12} color={Colors.primary} />
               <Text style={styles.tierBadgeText}>{user.tier}</Text>
             </View>
-            <Text style={styles.userNameText}>Chào bạn, {user.name}</Text>
+            <Text style={[styles.userNameText, { color: theme.textPrimary }]}>Chào bạn, {user.name}</Text>
           </View>
         </View>
 

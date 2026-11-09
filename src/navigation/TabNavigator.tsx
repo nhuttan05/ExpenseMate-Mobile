@@ -7,7 +7,7 @@ import { WalletsScreen } from '../pages/WalletsScreen';
 import { WhatIfSimulatorScreen } from '../pages/WhatIfSimulatorScreen';
 import { ProfileScreen } from '../pages/ProfileScreen';
 import { AdminScreen } from '../pages/AdminScreen';
-import { Colors, Shadows } from '../constants/theme';
+import { Colors, DarkColors, Shadows } from '../constants/theme';
 import { useAppSelector } from '../redux/store';
 
 const Tab = createBottomTabNavigator();
@@ -16,16 +16,23 @@ const Tab = createBottomTabNavigator();
 const NullScreen = () => null;
 
 export const TabNavigator = ({ navigation }: any) => {
-  const { currentUser } = useAppSelector((state) => state.auth);
+  const { currentUser, isDarkMode } = useAppSelector((state) => state.auth);
+  const theme = isDarkMode ? DarkColors : Colors;
 
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: true,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
+        tabBarStyle: [
+          styles.tabBar,
+          isDarkMode && {
+            backgroundColor: 'rgba(15, 23, 42, 0.98)',
+            borderTopColor: '#1E293B',
+          },
+        ],
+        tabBarActiveTintColor: theme.primary,
+        tabBarInactiveTintColor: theme.textMuted,
         tabBarLabelStyle: styles.tabBarLabel,
       }}
     >
