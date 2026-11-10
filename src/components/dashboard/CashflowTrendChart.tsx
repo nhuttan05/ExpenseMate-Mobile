@@ -4,18 +4,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  LayoutAnimation,
-  Platform,
-  UIManager,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../constants/theme';
 import { Transaction } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 interface CashflowTrendChartProps {
   transactions: Transaction[];
@@ -40,7 +33,6 @@ export const CashflowTrendChart: React.FC<CashflowTrendChartProps> = ({
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   const handlePeriodChange = (nextPeriod: PeriodType) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setPeriod(nextPeriod);
     setSelectedIdx(null);
   };
