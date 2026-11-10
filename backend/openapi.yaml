@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: ExpenseMate API
-  version: 1.2.0
-  description: Backend contract for authentication, personal finance data, sync and analytics.
+  version: 1.3.0
+  description: Backend contract for authentication, personal finance data, sync, analytics and server-side AI.
 servers:
   - url: http://localhost:3000
 paths:
@@ -264,6 +264,42 @@ paths:
       security: [{ bearerAuth: [] }]
       responses:
         '200': { description: Financial health summary }
+  /api/v1/ai/parse-transaction:
+    post:
+      summary: Parse a Vietnamese natural-language transaction
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AiTextInput' }
+      responses:
+        '200':
+          description: Parsed transaction or null when the text is not recognized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { allOf: [{ $ref: '#/components/schemas/AiParsedTransaction' }], nullable: true }
+  /api/v1/ai/chat:
+    post:
+      summary: Ask the server-side finance assistant
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AiTextInput' }
+      responses:
+        '200': { description: AI answer with optional parsed transaction and insights }
+  /api/v1/ai/insights:
+    get:
+      summary: Generate monthly AI insights from the user's real transactions
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: month, in: query, schema: { type: string, pattern: '^\\d{4}-(0[1-9]|1[0-2])$' } }]
+      responses:
+        '200': { description: Monthly AI insights, recommendations and budget warnings }
   /api/v1/wallets:
     get:
       summary: List wallets
@@ -557,6 +593,31 @@ components:
         expense: { type: number, minimum: 0 }
         balance: { type: number }
         category: { type: string }
+    AiTextInput:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 2000 }
+    AiParsedTransaction:
+      type: object
+      required: [title, amount, type, category, jarCode]
+      properties:
+        title: { type: string }
+        amount: { type: number, exclusiveMinimum: 0 }
+        type: { type: string, enum: [EXPENSE] }
+        walletId: { type: string, nullable: true }
+        walletName: { type: string, nullable: true }
+        jarCode: { type: string, enum: [NEC, FFA, EDU, LTSS, PLAY, GIVE] }
+        category:
+          type: object
+          required: [id, name, icon, color, backgroundColor, type]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            icon: { type: string }
+            color: { type: string }
+            backgroundColor: { type: string }
+            type: { type: string, enum: [INCOME, EXPENSE] }
   responses:
     AuthResponse:
       description: User and token pair

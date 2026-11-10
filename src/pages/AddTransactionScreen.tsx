@@ -14,9 +14,11 @@ import { addTransactionAsync } from '../redux/slices/expenseSlice';
 import { categories } from '../data/mockData';
 import { Category, TransactionType, JarCode } from '../types';
 import { AIService } from '../services/aiService';
+import { AiApi, ParsedAiTransaction } from '../api/aiApi';
+import { getApiAccessToken } from '../api/client';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
 import { showAppNotice } from '../utils/appNotice';
-import { getJarName, getJarShortName } from '../utils/formatters';
+import { getJarName } from '../utils/formatters';
 
 interface AddTransactionScreenProps {
   navigation: any;
@@ -40,9 +42,26 @@ export const AddTransactionScreen: React.FC<AddTransactionScreenProps> = ({ navi
   const filteredCategories = categories.filter((c) => c.type === type);
 
   // Natural Language Parser Handler
-  const handleApplyNaturalLanguage = () => {
+  const handleApplyNaturalLanguage = async () => {
     if (!aiNaturalInput.trim()) return;
-    const parsed = AIService.parseNaturalLanguage(aiNaturalInput.trim(), wallets);
+    let parsed: ParsedAiTransaction | null = null;
+    if (getApiAccessToken()) {
+      try {
+        const remoteParsed = await AiApi.parseTransaction(aiNaturalInput.trim());
+        if (remoteParsed) {
+          parsed = {
+            ...remoteParsed,
+            walletId: remoteParsed.walletId || wallets[0]?.id || 'wallet_vcb',
+          };
+        }
+      } catch {
+        // Fall back to the local parser when the backend is offline.
+      }
+    }
+    if (!parsed) {
+      const localParsed = AIService.parseNaturalLanguage(aiNaturalInput.trim(), wallets);
+      if (localParsed) parsed = { ...localParsed, type: 'EXPENSE' };
+    }
     if (!parsed) {
       showAppNotice(
         'Không nhận diện được',
@@ -54,11 +73,11 @@ export const AddTransactionScreen: React.FC<AddTransactionScreenProps> = ({ navi
     setAmountStr(parsed.amount.toLocaleString('vi-VN'));
     setTitle(parsed.title);
     setSelectedCategory(parsed.category);
-    setSelectedWalletId(parsed.walletId);
+    setSelectedWalletId(parsed.walletId || 'wallet_vcb');
     setSelectedJarCode(parsed.jarCode);
     setAiSuggested(true);
     setAiNaturalInput('');
-    showAppNotice('✨ AI Đã Tự Động Phân Loại', `Tiêu đề: ${parsed.title}\nSố tiền: ${parsed.amount.toLocaleString('vi-VN')} đ\nDanh mục: ${parsed.category.name}\nVí trừ tiền: ${wallets.find(w => w.id === parsed.walletId)?.name || 'Mặc định'}\nHũ chi tiêu: ${getJarName(parsed.jarCode)}`);
+    showAppNotice('✨ AI Đã Tự Động Phân Loại', `Tiêu đề: ${parsed.title}\nSố tiền: ${parsed.amount.toLocaleString('vi-VN')} đ\nDanh mục: ${parsed.category.name}\nVí trừ tiền: ${parsed.walletName || wallets.find(w => w.id === parsed.walletId)?.name || 'Mặc định'}\nHũ chi tiêu: ${getJarName(parsed.jarCode)}`);
   };
 
   const handleTitleChange = (text: string) => {

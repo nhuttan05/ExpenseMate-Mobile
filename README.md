@@ -82,6 +82,7 @@ Backend hiện có các nhóm API:
 - `wallets`, `wallets/jars`: quản lý ví, chuyển tiền atomically và phân bổ 6 hũ tài chính.
 - `recurring`, `debts`: khoản định kỳ, trạng thái tạm dừng và sổ công nợ.
 - `scenarios`, `challenges`, `analytics/health`: mô phỏng what-if, check-in thử thách và điểm sức khỏe tài chính.
+- `ai/parse-transaction`, `ai/chat`, `ai/insights`: AI xử lý ở backend, đọc dữ liệu PostgreSQL thật để nhận diện giao dịch tiếng Việt, trả lời tư vấn và phân tích tháng.
 
 PostgreSQL chạy trong container với cổng host `5433` (container `5432`); backend chạy ở cổng `3000`.
 
@@ -100,10 +101,12 @@ Khi chạy Expo Web trên chính máy tính, app tự dùng hostname hiện tạ
 3. **Axios API Client (`axios`):**
    - Cấu hình instance với timeout, interceptors, và cơ chế fallback đảm bảo app chạy mượt mà ngay cả khi không có kết nối server.
    - Hỗ trợ gọi API tỷ giá ngoại tệ thực tế và đồng bộ giao dịch.
-4. **Basic AI Engine:**
-   - **Tự động gợi ý danh mục:** Khi người dùng nhập tên giao dịch (ví dụ gõ *"Winmart"*, *"Highlands"*, *"Tiền điện"*), AI tự nhận diện và chọn danh mục tương ứng.
-   - **Tư vấn tài chính:** Phân tích tỷ lệ tiết kiệm, cảnh báo vượt 80% ngân sách và đưa ra lời khuyên phân bổ 50/30/20.
-   - **Nhập tự nhiên:** Câu như “Hôm nay ăn trưa 50.000 đồng” được nhận diện số tiền, tiêu đề và danh mục để tạo giao dịch.
+4. **Server-side AI Engine:**
+   - Khi đã đăng nhập, mobile gọi backend AI qua Axios; backend đọc giao dịch, ngân sách, ví và danh mục của đúng user từ PostgreSQL.
+   - **Nhập tự nhiên:** `POST /api/v1/ai/parse-transaction` nhận câu như “Hôm nay ăn trưa 50k trừ ví momo”, trả về số tiền, tiêu đề, ví, danh mục và hũ JARS.
+   - **Trợ lý tài chính:** `POST /api/v1/ai/chat` tạo câu trả lời động từ số liệu thật, gồm tỷ lệ tiết kiệm, khoản chi lớn nhất và đề xuất.
+   - **Phân tích tháng:** `GET /api/v1/ai/insights` trả về nhóm chi, cảnh báo ngân sách, khoản chi lớn nhất và kế hoạch tiết kiệm.
+   - Khi offline hoặc ở chế độ guest, mobile vẫn dùng parser local làm fallback để không mất luồng nhập giao dịch.
 5. **Responsive (Điện thoại, Tablet, iPad & Xoay ngang):**
    - Tự động nhận diện thiết bị qua `useResponsive`.
    - Giới hạn `maxWidth: 860px` căn giữa màn hình trên iPad/Tablet và xoay ngang, giúp các thẻ không bị kéo dãn bất hợp lý.

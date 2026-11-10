@@ -16,6 +16,7 @@ import { syncTransactionsHandler } from './routes/transactions.routes';
 import walletsRouter from './routes/wallets.routes';
 import recurringRouter from './routes/recurring.routes';
 import planningRouter from './routes/planning.routes';
+import aiRouter from './routes/ai.routes';
 
 export const app = express();
 
@@ -42,6 +43,7 @@ app.use('/api/v1/categories', categoriesRouter);
 app.use('/api/v1/budgets', budgetsRouter);
 app.use('/api/v1/notifications', notificationsRouter);
 app.use('/api/v1/analytics', analyticsRouter);
+app.use('/api/v1/ai', aiRouter);
 app.use('/api/v1/wallets', walletsRouter);
 app.use('/api/v1/recurring', recurringRouter);
 app.use('/api/v1', planningRouter);

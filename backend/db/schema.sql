@@ -223,11 +223,15 @@ CREATE TABLE IF NOT EXISTS challenges (
 INSERT INTO categories (id, user_id, name, icon, color, background_color, type)
 VALUES
   ('cat_food', NULL, 'Ăn uống', 'restaurant', '#F97316', '#FFEDD5', 'EXPENSE'),
+  ('cat_cafe', NULL, 'Cà phê & Đồ uống', 'local-cafe', '#92400E', '#FEF3C7', 'EXPENSE'),
   ('cat_transport', NULL, 'Di chuyển', 'directions-car', '#3B82F6', '#DBEAFE', 'EXPENSE'),
   ('cat_shopping', NULL, 'Mua sắm', 'shopping-bag', '#A855F7', '#F3E8FF', 'EXPENSE'),
   ('cat_bills', NULL, 'Hóa đơn', 'receipt-long', '#EF4444', '#FEE2E2', 'EXPENSE'),
+  ('cat_utilities', NULL, 'Tiện ích & Hóa đơn', 'bolt', '#EF4444', '#FEE2E2', 'EXPENSE'),
   ('cat_entertainment', NULL, 'Giải trí', 'movie', '#EC4899', '#FCE7F3', 'EXPENSE'),
   ('cat_health', NULL, 'Sức khỏe', 'favorite', '#14B8A6', '#CCFBF1', 'EXPENSE'),
+  ('cat_education', NULL, 'Học tập & Sách vở', 'school', '#7C3AED', '#EDE9FE', 'EXPENSE'),
+  ('cat_investment', NULL, 'Đầu tư & Sinh lời', 'trending-up', '#16A34A', '#DCFCE7', 'EXPENSE'),
   ('cat_transfer', NULL, 'Chuyển ví', 'sync-alt', '#0284C7', '#E0F2FE', 'EXPENSE'),
   ('cat_salary', NULL, 'Lương', 'payments', '#16A34A', '#DCFCE7', 'INCOME'),
   ('cat_bonus', NULL, 'Thưởng', 'card-giftcard', '#CA8A04', '#FEF9C3', 'INCOME')

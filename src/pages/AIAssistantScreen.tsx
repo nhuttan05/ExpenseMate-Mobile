@@ -17,6 +17,8 @@ import { addMessage } from '../redux/slices/aiSlice';
 import { addTransactionAsync } from '../redux/slices/expenseSlice';
 import { AIService } from '../services/aiService';
 import { AIChatMessage } from '../types';
+import { AiApi } from '../api/aiApi';
+import { getApiAccessToken } from '../api/client';
 
 interface AIAssistantScreenProps {
   navigation: any;
@@ -36,7 +38,7 @@ export const AIAssistantScreen: React.FC<AIAssistantScreenProps> = ({ navigation
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = async (textToSend?: string) => {
     const text = textToSend || inputText;
     if (!text.trim()) return;
 
@@ -49,6 +51,35 @@ export const AIAssistantScreen: React.FC<AIAssistantScreenProps> = ({ navigation
     dispatch(addMessage(userMsg));
     if (!textToSend) setInputText('');
 
+    if (getApiAccessToken()) {
+      try {
+        const result = await AiApi.chat(text.trim());
+        if (result.parsedTransaction) {
+          dispatch(addTransactionAsync({
+            title: result.parsedTransaction.title,
+            amount: result.parsedTransaction.amount,
+            type: result.parsedTransaction.type,
+            category: result.parsedTransaction.category,
+            date: new Date().toISOString().split('T')[0],
+            formattedTime: 'Vừa xong',
+            paymentMethod: result.parsedTransaction.walletName || 'Tiền mặt',
+            walletId: result.parsedTransaction.walletId,
+            jarCode: result.parsedTransaction.jarCode,
+          }));
+        }
+        dispatch(addMessage({
+          id: createMessageId(),
+          sender: 'assistant',
+          message: result.reply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          suggestions: result.suggestions,
+        }));
+        return;
+      } catch {
+        // Keep the local assistant available when the backend is offline.
+      }
+    }
+
     const parsedTransaction = AIService.parseNaturalLanguage(text);
     if (parsedTransaction) {
       dispatch(addTransactionAsync({
@@ -59,6 +90,8 @@ export const AIAssistantScreen: React.FC<AIAssistantScreenProps> = ({ navigation
         date: new Date().toISOString().split('T')[0],
         formattedTime: 'Vừa xong',
         paymentMethod: 'Tiền mặt',
+        walletId: parsedTransaction.walletId,
+        jarCode: parsedTransaction.jarCode,
       }));
     }
 
