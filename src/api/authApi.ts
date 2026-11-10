@@ -61,3 +61,7 @@ export const AuthApi = {
 
   getAccessToken: () => currentSession?.accessToken || null,
 };
+
+export const getAuthErrorMessage = (error: any, fallback: string): string => {
+  return error?.response?.data?.error?.message || error?.message || fallback;
+};

@@ -41,7 +41,7 @@ const initialDark = getSavedDarkModeForAccount(mockUser.id, mockUser.isDarkMode 
 
 const initialState: AuthState = {
   currentUser: { ...mockUser, isDarkMode: initialDark },
-  isAuthenticated: true,
+  isAuthenticated: false,
   activeViewMode: mockUser.role,
   usersList: initialSystemUsers,
   auditLogs: initialAuditLogs,

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Shadows, Spacing } from '../constants/theme';
-import { AuthApi } from '../api/authApi';
+import { AuthApi, getAuthErrorMessage } from '../api/authApi';
 import { useAppDispatch } from '../redux/store';
 import { setCurrentUser } from '../redux/slices/authSlice';
 import { mockUser, mockUser2, mockAdminUser } from '../data/mockData';
@@ -22,6 +22,8 @@ import { loadBudgets } from '../redux/slices/budgetSlice';
 import { loadWalletsAndJars } from '../redux/slices/walletSlice';
 import { loadRecurringAndDebts } from '../redux/slices/recurringSlice';
 import { loadSimulationData } from '../redux/slices/simulationSlice';
+import { showAppNotice } from '../utils/appNotice';
+import { UserProfile } from '../types';
 
 interface LoginScreenProps {
   navigation: any;
@@ -35,28 +37,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const reportValidationError = (message: string) => {
+    setErrorMsg(message);
+    showAppNotice('Thông tin đăng nhập chưa hợp lệ', message);
+  };
 
-  const performIsolatedLogin = async (userProfile: any) => {
-    try {
-      // 1. Cô lập dữ liệu: Nạp đúng dữ liệu của Account vào SQLite & Memory
-      await switchActiveAccountDatabase(userProfile.id);
+  const buildUserProfile = (authUser: { id: string; name: string; email: string }): UserProfile => {
+    const knownProfile = [mockAdminUser, mockUser2, mockUser].find(
+      (profile) => profile.email.toLowerCase() === authUser.email.toLowerCase()
+    );
+    return {
+      ...(knownProfile || mockUser),
+      id: authUser.id,
+      name: authUser.name,
+      email: authUser.email,
+      role: knownProfile?.role || 'USER',
+      status: 'ACTIVE',
+    };
+  };
 
-      // 2. Cập nhật Auth state trong Redux
-      dispatch(setCurrentUser(userProfile));
-
-      // 3. Nạp lại toàn bộ Redux slices theo tài khoản đó
-      dispatch(loadTransactions());
-      dispatch(loadBudgets());
-      dispatch(loadWalletsAndJars());
-      dispatch(loadRecurringAndDebts());
-      dispatch(loadSimulationData());
-
-      // 4. Vào màn hình chính (Main)
-      navigation.replace('Main');
-    } catch (err) {
-      console.error('Login isolation error:', err);
-      navigation.replace('Main');
-    }
+  const performIsolatedLogin = async (userProfile: UserProfile) => {
+    await switchActiveAccountDatabase(userProfile.id);
+    dispatch(setCurrentUser(userProfile));
+    dispatch(loadTransactions());
+    dispatch(loadBudgets());
+    dispatch(loadWalletsAndJars());
+    dispatch(loadRecurringAndDebts());
+    dispatch(loadSimulationData());
   };
 
   const handleLogin = async () => {
@@ -64,80 +71,44 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     const cleanPassword = password.trim();
 
     if (!cleanEmail) {
-      setErrorMsg('Vui lòng nhập địa chỉ email tài khoản.');
+      reportValidationError('Vui lòng nhập địa chỉ email tài khoản.');
       return;
     }
 
     if (!cleanPassword) {
-      setErrorMsg('Vui lòng nhập mật khẩu đăng nhập.');
+      reportValidationError('Vui lòng nhập mật khẩu đăng nhập.');
       return;
     }
 
     setLoading(true);
     setErrorMsg(null);
 
-    // Xác thực kiểm tra bảo mật mật khẩu
-    let targetProfile = mockUser;
-
-    if (cleanEmail === 'admin@expensemate.com') {
-      // Mật khẩu quản trị viên
-      if (cleanPassword !== 'Admin123!' && cleanPassword !== 'admin' && cleanPassword !== 'Password123!') {
-        setErrorMsg('Mật khẩu quản trị viên không chính xác. Vui lòng kiểm tra lại!');
-        setLoading(false);
-        return;
-      }
-      targetProfile = mockAdminUser;
-    } else if (cleanEmail === 'user@expensemate.com') {
-      // Mật khẩu khách hàng Nguyễn Văn An
-      if (cleanPassword !== 'Password123!' && cleanPassword !== '123456') {
-        setErrorMsg('Mật khẩu tài khoản không chính xác. Vui lòng kiểm tra lại!');
-        setLoading(false);
-        return;
-      }
-      targetProfile = mockUser2;
-    } else if (cleanEmail === 'demo@expensemate.com') {
-      // Mật khẩu khách hàng Nhựt Tân
-      if (cleanPassword !== 'Password123!' && cleanPassword !== '123456') {
-        setErrorMsg('Mật khẩu tài khoản không chính xác. Vui lòng kiểm tra lại!');
-        setLoading(false);
-        return;
-      }
-      targetProfile = mockUser;
-    } else {
-      // Tài khoản người dùng cá nhân khác
-      if (cleanPassword.length < 6) {
-        setErrorMsg('Mật khẩu phải chứa ít nhất 6 ký tự.');
-        setLoading(false);
-        return;
-      }
-      targetProfile = {
-        ...mockUser,
-        id: `usr_${cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`,
-        name: cleanEmail.split('@')[0],
-        email: cleanEmail,
-        role: 'USER',
-      };
-    }
-
-    // Thử gọi backend API nếu có (timeout tối đa 800ms để offline vẫn mượt mà)
     try {
-      const backendPromise = AuthApi.login(cleanEmail, cleanPassword);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 800)
+      const session = await AuthApi.login(cleanEmail, cleanPassword);
+      await performIsolatedLogin(buildUserProfile(session.user));
+      showAppNotice('Đăng nhập thành công', `Chào mừng ${session.user.name} quay lại ExpenseMate.`, () => navigation.replace('Main'));
+    } catch (error: any) {
+      const message = getAuthErrorMessage(
+        error,
+        'Không thể kết nối máy chủ. Vui lòng kiểm tra backend hoặc chọn chế độ khách.'
       );
-      await Promise.race([backendPromise, timeoutPromise]);
-    } catch {
-      // Chế độ ngoại tuyến hoặc backend offline: tiếp tục xác thực tài khoản cục bộ
+      setErrorMsg(message);
+      showAppNotice('Đăng nhập thất bại', message);
+    } finally {
+      setLoading(false);
     }
-
-    await performIsolatedLogin(targetProfile);
-    setLoading(false);
   };
 
   const handleGuestQuickMode = async () => {
     setLoading(true);
-    await performIsolatedLogin(mockUser);
-    setLoading(false);
+    try {
+      await performIsolatedLogin(mockUser);
+      showAppNotice('Đã vào chế độ khách', 'Dữ liệu demo chỉ được lưu cục bộ trên thiết bị.', () => navigation.replace('Main'));
+    } catch (error: any) {
+      showAppNotice('Không thể vào chế độ khách', error?.message || 'Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

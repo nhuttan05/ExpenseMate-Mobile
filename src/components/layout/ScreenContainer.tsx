@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, StyleSheet, SafeAreaView, ScrollView, ViewStyle, StyleProp } from 'react-native';
+import { View, StyleSheet, ScrollView, ViewStyle, StyleProp } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useResponsive } from '../../hooks/useResponsive';
 import { Colors, DarkColors } from '../../constants/theme';
 import { useAppSelector } from '../../redux/store';
@@ -25,11 +26,13 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
     width: '100%',
     maxWidth: contentMaxWidth,
     alignSelf: 'center',
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: currentBg }, style]}>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.safeArea, { backgroundColor: currentBg }, style]}>
       {scrollable ? (
         <ScrollView
           contentContainerStyle={[
@@ -56,6 +59,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 104,
   },
   tabletScrollPadding: {
     paddingHorizontal: 24,

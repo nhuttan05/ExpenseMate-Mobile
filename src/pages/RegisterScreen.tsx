@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Shadows, Spacing } from '../constants/theme';
-import { AuthApi } from '../api/authApi';
+import { AuthApi, getAuthErrorMessage } from '../api/authApi';
 import { useAppDispatch } from '../redux/store';
 import { registerNewUser } from '../redux/slices/authSlice';
 import { switchActiveAccountDatabase } from '../services/database';
@@ -22,6 +22,7 @@ import { loadWalletsAndJars } from '../redux/slices/walletSlice';
 import { loadRecurringAndDebts } from '../redux/slices/recurringSlice';
 import { loadSimulationData } from '../redux/slices/simulationSlice';
 import { UserProfile } from '../types';
+import { showAppNotice } from '../utils/appNotice';
 
 interface RegisterScreenProps {
   navigation: any;
@@ -37,6 +38,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const reportValidationError = (message: string) => {
+    setErrorMsg(message);
+    showAppNotice('Thông tin đăng ký chưa hợp lệ', message);
+  };
 
   const handleRegister = async () => {
     const cleanName = name.trim();
@@ -46,53 +51,43 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
 
     // 1. Kiểm tra họ và tên
     if (!cleanName) {
-      setErrorMsg('Vui lòng nhập họ và tên của bạn.');
+      reportValidationError('Vui lòng nhập họ và tên của bạn.');
       return;
     }
 
     // 2. Kiểm tra email
     if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
-      setErrorMsg('Vui lòng nhập địa chỉ email hợp lệ.');
+      reportValidationError('Vui lòng nhập địa chỉ email hợp lệ.');
       return;
     }
 
     // 3. Kiểm tra độ dài mật khẩu
-    if (cleanPassword.length < 6) {
-      setErrorMsg('Mật khẩu phải chứa ít nhất 6 ký tự.');
+    if (cleanPassword.length < 8) {
+      reportValidationError('Mật khẩu phải chứa ít nhất 8 ký tự.');
       return;
     }
 
     // 4. Kiểm tra xác nhận mật khẩu lần 2 (BẮT BUỘC)
     if (!cleanConfirm) {
-      setErrorMsg('Vui lòng nhập lại mật khẩu lần 2 để xác nhận.');
+      reportValidationError('Vui lòng nhập lại mật khẩu lần 2 để xác nhận.');
       return;
     }
 
     if (cleanPassword !== cleanConfirm) {
-      setErrorMsg('Mật khẩu xác nhận lần 2 không trùng khớp. Vui lòng kiểm tra lại!');
+      reportValidationError('Mật khẩu xác nhận lần 2 không trùng khớp. Vui lòng kiểm tra lại!');
       return;
     }
 
     setLoading(true);
     setErrorMsg(null);
 
-    // Thử gọi backend Docker API (timeout tối đa 800ms để offline-first luôn mượt mà)
     try {
-      const backendPromise = AuthApi.register(cleanName, cleanEmail, cleanPassword);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 800)
-      );
-      await Promise.race([backendPromise, timeoutPromise]);
-    } catch {
-      // Offline fallback: tiếp tục tạo tài khoản cục bộ an toàn
-    }
-
-    try {
-      const newUserId = `usr_${Date.now()}`;
+      const session = await AuthApi.register(cleanName, cleanEmail, cleanPassword);
+      const newUserId = session.user.id;
       const newProfile: UserProfile = {
         id: newUserId,
-        name: cleanName,
-        email: cleanEmail,
+        name: session.user.name,
+        email: session.user.email,
         role: 'USER',
         tier: 'Người Dùng Mới',
         avatarUrl:
@@ -107,24 +102,21 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) =>
         isDarkMode: false,
       };
 
-      // 1. Khởi tạo database và cô lập dữ liệu cho tài khoản mới
       await switchActiveAccountDatabase(newUserId);
-
-      // 2. Lưu tài khoản mới vào Redux
       dispatch(registerNewUser(newProfile));
-
-      // 3. Nạp lại toàn bộ slice dữ liệu
       dispatch(loadTransactions());
       dispatch(loadBudgets());
       dispatch(loadWalletsAndJars());
       dispatch(loadRecurringAndDebts());
       dispatch(loadSimulationData());
-
-      // 4. Vào màn hình chính
-      navigation.replace('Main');
-    } catch (err) {
-      console.error('Lỗi khởi tạo tài khoản mới:', err);
-      navigation.replace('Main');
+      showAppNotice('Đăng ký thành công', `Tài khoản ${session.user.email} đã được tạo và lưu trên hệ thống.`, () => navigation.replace('Main'));
+    } catch (error: any) {
+      const message = getAuthErrorMessage(
+        error,
+        'Không thể kết nối máy chủ. Vui lòng kiểm tra backend và thử lại.'
+      );
+      setErrorMsg(message);
+      showAppNotice('Đăng ký thất bại', message);
     } finally {
       setLoading(false);
     }

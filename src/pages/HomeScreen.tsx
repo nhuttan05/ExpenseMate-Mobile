@@ -33,7 +33,8 @@ interface HomeScreenProps {
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const dispatch = useAppDispatch();
-  const { isTablet } = useResponsive();
+  const { isTablet, width } = useResponsive();
+  const isCompact = !isTablet && width < 400;
 
   const { transactions, isBalanceVisible } = useAppSelector((state) => state.expense);
   const { wallets, jars } = useAppSelector((state) => state.wallet);
@@ -224,9 +225,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <View style={styles.userTextContainer}>
             <View style={styles.tierBadge}>
               <MaterialIcons name="verified" size={12} color={Colors.primary} />
-              <Text style={styles.tierBadgeText}>{user.tier}</Text>
+            <Text style={styles.tierBadgeText} numberOfLines={1}>{user.tier}</Text>
             </View>
-            <Text style={[styles.userNameText, { color: theme.textPrimary }]}>Chào bạn, {user.name}</Text>
+            <Text style={[styles.userNameText, { color: theme.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">
+              Chào bạn, {user.name}
+            </Text>
           </View>
         </View>
 
@@ -265,7 +268,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         <View style={styles.heroTopRow}>
           <View style={styles.heroTitleRow}>
             <MaterialIcons name="shield" size={16} color={Colors.incomeLight} />
-            <Text style={styles.heroLabel}>TỔNG TÀI SẢN KHẢ DỤNG</Text>
+            <Text style={styles.heroLabel} numberOfLines={1}>TỔNG TÀI SẢN KHẢ DỤNG</Text>
           </View>
           <TouchableOpacity
             onPress={() => dispatch(toggleBalanceVisibility())}
@@ -288,7 +291,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <MaterialIcons name="account-balance-wallet" size={14} color={Colors.income} />
             <Text style={styles.heroBadgeText}>{wallets.length} Ví ảo đang hoạt động</Text>
           </View>
-          <Text style={styles.heroSubtitle}>Cập nhật theo thời gian thực</Text>
+            <Text style={styles.heroSubtitle} numberOfLines={1}>Cập nhật theo thời gian thực</Text>
         </View>
 
         {/* Quick Action Pills inside Hero */}
@@ -440,7 +443,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       </View>
 
       {/* 4. BENTO GRID 2 COLUMNS (Health Score & Monthly Cashflow) */}
-      <View style={[styles.bentoRow, isTablet && { flexWrap: 'nowrap' }]}>
+      <View style={[styles.bentoRow, isTablet && { flexWrap: 'nowrap' }, isCompact && styles.bentoRowCompact]}>
         {/* Left Bento: Financial Health Score */}
         <AnimatedCard delay={100} style={[styles.bentoCard, { flex: 1 }]}>
           <TouchableOpacity
@@ -970,6 +973,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xs,
   },
   userInfo: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
@@ -982,6 +987,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderEmerald,
   },
   userTextContainer: {
+    flexShrink: 1,
+    minWidth: 0,
     gap: 2,
   },
   tierBadge: {
@@ -995,16 +1002,19 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   tierBadgeText: {
+    flexShrink: 1,
     fontSize: 11,
     fontWeight: '700',
     color: Colors.primary,
   },
   userNameText: {
+    flexShrink: 1,
     fontSize: 17,
     fontWeight: '800',
     color: Colors.textPrimary,
   },
   headerActions: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
@@ -1045,11 +1055,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   heroTitleRow: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   heroLabel: {
+    flexShrink: 1,
     fontSize: 12,
     fontWeight: '800',
     color: Colors.textMuted,
@@ -1064,12 +1077,14 @@ const styles = StyleSheet.create({
   },
   heroMetaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: Spacing.md,
     marginTop: Spacing.xs,
     marginBottom: Spacing.xl,
   },
   heroBadge: {
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -1079,11 +1094,13 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   heroBadgeText: {
+    flexShrink: 1,
     fontSize: 12,
     fontWeight: '700',
     color: Colors.income,
   },
   heroSubtitle: {
+    flexShrink: 1,
     fontSize: 12,
     color: Colors.textMuted,
   },
@@ -1096,6 +1113,7 @@ const styles = StyleSheet.create({
   },
   heroActionBtn: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1107,14 +1125,17 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
   },
   heroActionText: {
+    flexShrink: 1,
     fontSize: 12,
     fontWeight: '700',
     color: Colors.textWhite,
+    textAlign: 'center',
   },
 
   // SECTION HEADERS
   sectionHeaderRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.md,
@@ -1127,11 +1148,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionTitleWithIcon: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   sectionTitle: {
+    flexShrink: 1,
     fontSize: 17,
     fontWeight: '800',
     color: Colors.textPrimary,
@@ -1147,6 +1171,7 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   walletHeaderActions: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
@@ -1245,16 +1270,21 @@ const styles = StyleSheet.create({
   // BENTO GRID
   bentoRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.md,
     marginBottom: Spacing.lg,
   },
   bentoCard: {
+    minWidth: 0,
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
     ...Shadows.card,
+  },
+  bentoRowCompact: {
+    flexDirection: 'column',
   },
   bentoHeader: {
     flexDirection: 'row',
